@@ -205,6 +205,7 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<'bazi' | 'numerology' | 'western' | 'houses'>('bazi');
   const [savedClients, setSavedClients] = useState<SavedClient[]>([]);
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
 
   // Load clients from LocalStorage on mount
   useEffect(() => {
@@ -230,21 +231,44 @@ export default function App() {
     }
 
     setIsSaving(true);
-    const newClient: SavedClient = {
-      id: crypto.randomUUID(),
-      name: clientName,
-      phone: clientPhone,
-      birthDate: birthDate,
-      birthTime: birthTime,
-      latitude: latitude,
-      longitude: longitude,
-      gender: gender === 1 ? 'male' : 'female',
-      createdAt: Date.now(),
-    };
+    
+    if (editingClientId) {
+      // Update existing client
+      const updated = savedClients.map(c => {
+        if (c.id === editingClientId) {
+          return {
+            ...c,
+            name: clientName,
+            phone: clientPhone,
+            birthDate: birthDate,
+            birthTime: birthTime,
+            latitude: latitude,
+            longitude: longitude,
+            gender: gender === 1 ? 'male' : 'female' as 'male' | 'female',
+          };
+        }
+        return c;
+      });
+      saveToLocalStorage(updated);
+    } else {
+      // Create new client
+      const newClient: SavedClient = {
+        id: crypto.randomUUID(),
+        name: clientName,
+        phone: clientPhone,
+        birthDate: birthDate,
+        birthTime: birthTime,
+        latitude: latitude,
+        longitude: longitude,
+        gender: gender === 1 ? 'male' : 'female',
+        createdAt: Date.now(),
+      };
+      const updated = [newClient, ...savedClients];
+      saveToLocalStorage(updated);
+    }
 
-    const updated = [newClient, ...savedClients];
-    saveToLocalStorage(updated);
     setIsSaving(false);
+    setEditingClientId(null);
     setView('analyze');
   };
 
@@ -262,7 +286,21 @@ export default function App() {
     setLatitude(client.latitude || 3.1390);
     setLongitude(client.longitude || 101.6869);
     setGender(client.gender === 'male' ? 1 : 0);
+    setEditingClientId(null);
     setView('analyze');
+  };
+
+  const editClient = (client: SavedClient, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setClientName(client.name);
+    setClientPhone(client.phone);
+    setBirthDate(client.birthDate);
+    setBirthTime(client.birthTime);
+    setLatitude(client.latitude || 3.1390);
+    setLongitude(client.longitude || 101.6869);
+    setGender(client.gender === 'male' ? 1 : 0);
+    setEditingClientId(client.id);
+    setView('form');
   };
 
   const resetForm = () => {
@@ -273,6 +311,7 @@ export default function App() {
     setLatitude(3.1390);
     setLongitude(101.6869);
     setGender(1);
+    setEditingClientId(null);
     setView('form');
   };
 
@@ -452,7 +491,7 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 p-2 sm:p-4">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 pt-8 pb-20 px-4 sm:p-8">
       <div className="max-w-[800px] mx-auto flex flex-col gap-4">
         
         {/* VIEW 1: CLIENT LIST (FRONT PAGE) */}
@@ -464,8 +503,8 @@ export default function App() {
                   <Zap className="w-7 h-7 text-gold" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold tracking-tight text-white">阿赞旺命理</h1>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Archan Wang Destiny System</p>
+                  <h1 className="text-xl font-bold tracking-tight text-white">阿赞旺命理</h1>
+                  <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest">Archan Wang Destiny System</p>
                 </div>
               </div>
             </header>
@@ -483,7 +522,7 @@ export default function App() {
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">档案列表 ({filteredClients.length})</span>
+                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">档案列表 ({filteredClients.length})</span>
               </div>
               
               <div className="grid grid-cols-1 gap-2">
@@ -500,20 +539,27 @@ export default function App() {
                         <User className="w-5 h-5" />
                       </div>
                       <div className="flex flex-col items-start">
-                        <span className="text-sm font-bold text-white mb-0.5">{client.name}</span>
-                        <div className="flex items-center gap-3 text-[10px] font-medium text-zinc-500">
-                          <span className="flex items-center gap-1"><Phone className="w-2.5 h-2.5" />{client.phone}</span>
-                          <span className="flex items-center gap-1"><CalendarIcon className="w-2.5 h-2.5" />{client.birthDate}</span>
+                        <span className="text-base font-bold text-white mb-1">{client.name}</span>
+                        <div className="flex flex-col gap-1 text-xs font-medium text-zinc-500">
+                          <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-zinc-600" />{client.phone}</span>
+                          <span className="flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5 text-zinc-600" />{client.birthDate}</span>
                         </div>
                       </div>
                     </button>
                     <div className="flex items-center gap-2">
                       <button 
+                        onClick={(e) => editClient(client, e)}
+                        className="p-3 text-zinc-600 hover:text-gold hover:bg-gold/10 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 opacity-60"
+                        title="编辑 (Edit)"
+                      >
+                        <Settings className="w-5 h-5" />
+                      </button>
+                      <button 
                         onClick={(e) => deleteClient(client.id, e)}
-                        className="p-2 text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 opacity-60"
+                        className="p-3 text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 opacity-60"
                         title="删除 (Delete)"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-5 h-5" />
                       </button>
                       <button 
                         onClick={() => loadClient(client)}
@@ -536,9 +582,9 @@ export default function App() {
 
             <button 
               onClick={resetForm}
-              className="fixed bottom-6 right-6 w-14 h-14 bg-gold rounded-full shadow-2xl flex items-center justify-center text-white hover:opacity-90 hover:scale-110 active:scale-95 transition-all z-50 border-4 border-zinc-950"
+              className="fixed bottom-10 right-6 w-16 h-16 bg-gold rounded-full shadow-2xl flex items-center justify-center text-white hover:opacity-90 hover:scale-110 active:scale-95 transition-all z-50 border-4 border-zinc-950"
             >
-              <Plus className="w-8 h-8" />
+              <Plus className="w-10 h-10" />
             </button>
           </div>
         )}
@@ -553,13 +599,13 @@ export default function App() {
               >
                 <ChevronLeft className="w-6 h-6 text-zinc-400" />
               </button>
-              <h2 className="text-lg font-bold">添加新档案</h2>
+              <h2 className="text-lg font-bold">{editingClientId ? "修改档案" : "添加新档案"}</h2>
             </div>
 
-            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-2xl flex flex-col gap-6">
+            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-2xl flex flex-col gap-6 mb-10">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">客户姓名 (Name)*</label>
+                  <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">客户姓名 (Name)*</label>
                   <input 
                     type="text" 
                     placeholder="请输入姓名"
@@ -569,7 +615,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">联系电话 (Phone)*</label>
+                  <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">联系电话 (Phone)*</label>
                   <input 
                     type="tel" 
                     placeholder="请输入电话号码"
@@ -579,7 +625,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">出生日期 (Date)*</label>
+                  <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">出生日期 (Date)*</label>
                   <input 
                     type="date" 
                     value={birthDate} 
@@ -589,7 +635,7 @@ export default function App() {
                 </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
-                      <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">时间 (Time)</label>
+                      <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">时间 (Time)</label>
                       <input 
                         type="time" 
                         value={birthTime} 
@@ -598,7 +644,7 @@ export default function App() {
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                       <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">时区 (Timezone)</label>
+                       <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">时区 (Timezone)</label>
                        <input 
                          type="number" 
                          value={timezone} 
@@ -609,7 +655,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">性别 (Gender)</label>
+                    <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">性别 (Gender)</label>
                     <select 
                       value={gender} 
                       onChange={(e) => setGender(Number(e.target.value))} 
@@ -623,7 +669,7 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">纬度 (Latitude)</label>
+                    <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">纬度 (Latitude)</label>
                     <input 
                       type="number" 
                       step="0.0001"
@@ -633,7 +679,7 @@ export default function App() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-zinc-500 ml-1 uppercase tracking-widest">经度 (Longitude)</label>
+                    <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">经度 (Longitude)</label>
                     <input 
                       type="number" 
                       step="0.0001"
@@ -653,7 +699,7 @@ export default function App() {
                   )}
                 >
                   <Save className="w-5 h-5" />
-                  {isSaving ? "正在创建档案..." : "创建并开始分析"}
+                  {isSaving ? "正在保存..." : (editingClientId ? "保存修改" : "创建并开始分析")}
                 </button>
               </div>
             </div>
@@ -673,27 +719,27 @@ export default function App() {
               <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
                 <User className="w-3.5 h-3.5 text-gold" />
                 <span className="text-xs font-black">{clientName}</span>
-                <span className="text-[10px] text-zinc-500 font-bold">({gender === 1 ? '男' : '女'})</span>
+                <span className="text-xs text-zinc-500 font-bold">({gender === 1 ? '男' : '女'})</span>
               </div>
             </div>
 
             {/* Summary Information Table */}
             <div className="grid grid-cols-2 gap-2 bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl shadow-lg">
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">姓名 (Name)</span>
-                <span className="text-sm font-bold text-white">{clientName}</span>
+                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">姓名 (Name)</span>
+                <span className="text-base font-bold text-white">{clientName}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">岁数 (Age)</span>
-                <span className="text-sm font-bold text-gold">{calculateWesternAge(birthDate)} 岁</span>
+                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">岁数 (Age)</span>
+                <span className="text-base font-bold text-gold">{calculateWesternAge(birthDate)} 岁</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">生日日期 (阳历 Solar)</span>
-                <span className="text-[11px] font-bold text-zinc-300">{solar.toYmd()} {birthTime}</span>
+                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">生日日期 (阳历 Solar)</span>
+                <span className="text-xs font-bold text-zinc-300">{solar.toYmd()} {birthTime}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] text-zinc-500 font-black uppercase tracking-widest">生日日期 (农历 Lunar)</span>
-                <span className="text-[11px] font-bold text-zinc-300">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
+                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">生日日期 (农历 Lunar)</span>
+                <span className="text-xs font-bold text-zinc-300">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
               </div>
             </div>
 
@@ -746,23 +792,23 @@ export default function App() {
                 {/* The Main Bazi Grid - Matching Image Layout */}
                 <div className="flex flex-col bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden shadow-2xl">
           {/* Row 1: Headers */}
-          <div className="flex bg-zinc-800 border-b border-zinc-700 h-8 sm:h-10">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-[10px] sm:text-xs font-bold border-r border-zinc-700">日期</div>
+          <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
+            <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700">日期</div>
             {["时柱", "日柱", "月柱", "年柱", "大运", "流年"].map((label, idx) => (
-              <div key={idx} className="flex-1 flex items-center justify-center text-[10px] sm:text-xs font-bold border-r border-zinc-700 last:border-r-0">{label}</div>
+              <div key={idx} className="flex-1 flex items-center justify-center text-xs font-bold border-r border-zinc-700 last:border-r-0">{label}</div>
             ))}
           </div>
 
           {/* Row 2: Age/Year */}
-          <div className="flex bg-zinc-800/40 border-b border-zinc-700 h-10 sm:h-12">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-[10px] font-bold border-r border-zinc-700 leading-tight">歳<br />年</div>
-            <div className="flex-[4] flex items-center justify-center text-blue-500 text-[10px] sm:text-xs font-black italic border-r border-zinc-700 text-center px-1">
+          <div className="flex bg-zinc-800/40 border-b border-zinc-700 h-12 sm:h-14">
+            <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700 leading-tight">歳<br />年</div>
+            <div className="flex-[4] flex items-center justify-center text-blue-500 text-xs font-black italic border-r border-zinc-700 text-center px-1">
             </div>
             <div className="flex-1 flex items-center justify-center border-r border-zinc-700 text-center leading-tight">
-              <div className="text-[10px] font-bold text-white">{currentDaYun.getStartAge()}歳<br />{currentDaYun.getStartYear()}</div>
+              <div className="text-[11px] font-bold text-white">{currentDaYun.getStartAge()}歳<br />{currentDaYun.getStartYear()}</div>
             </div>
             <div className="flex-1 flex items-center justify-center text-center leading-tight">
-              <div className="text-[10px] font-bold text-white">{currentLiuNian.getYear() - solar.getYear() + 1}歳<br />{currentLiuNian.getYear()}</div>
+              <div className="text-[11px] font-bold text-white">{currentLiuNian.getYear() - solar.getYear() + 1}歳<br />{currentLiuNian.getYear()}</div>
             </div>
           </div>
 
@@ -780,8 +826,8 @@ export default function App() {
               <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
                 <span className={cn("text-2xl sm:text-4xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
                 <div className="absolute top-1 right-1 flex flex-col items-center">
-                  <span className="text-[9px] sm:text-[10px] font-bold text-zinc-400">{getShiShenShort(item.ss)}</span>
-                  {item.isDayMaster && <span className="text-[8px] sm:text-[9px] font-bold text-gold mt-0.5">{gender === 1 ? "男" : "女"}</span>}
+                  <span className="text-[11px] font-bold text-zinc-400">{getShiShenShort(item.ss)}</span>
+                  {item.isDayMaster && <span className="text-[10px] sm:text-[11px] font-bold text-gold mt-0.5">{gender === 1 ? "男" : "女"}</span>}
                 </div>
               </div>
             ))}
@@ -801,7 +847,7 @@ export default function App() {
               <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
                 <span className={cn("text-2xl sm:text-4xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
                 <div className="absolute top-1 right-1 flex flex-col items-end">
-                  {item.sss.map((s, i) => <span key={i} className="text-[8px] sm:text-[9px] font-bold text-zinc-500 leading-tight">{getShiShenShort(s)}</span>)}
+                  {item.sss.map((s, i) => <span key={i} className="text-[10px] sm:text-[11px] font-bold text-zinc-500 leading-tight">{getShiShenShort(s)}</span>)}
                 </div>
               </div>
             ))}
@@ -809,20 +855,20 @@ export default function App() {
 
           {/* Row 5 & 6: Liu Yue (Month distribution) */}
           <div className="flex border-b border-zinc-800">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-[9px] font-bold bg-zinc-900 border-r border-zinc-800 px-1 leading-tight">流月干</div>
+            <div className="w-12 sm:w-16 flex items-center justify-center text-[11px] font-bold bg-zinc-900 border-r border-zinc-800 px-1 leading-tight">流月干</div>
             <div className="flex-1 grid grid-cols-12">
               {liuYueList.map((ly, i) => (
-                <div key={i} className="flex justify-center items-center py-1 border-r border-zinc-800 last:border-r-0 text-[10px] sm:text-xs">
+                <div key={i} className="flex justify-center items-center py-1 border-r border-zinc-800 last:border-r-0 text-xs sm:text-xs">
                   <span className={getBaziColorClass(ly.getGanZhi()[0])}>{ly.getGanZhi()[0]}</span>
                 </div>
               ))}
             </div>
           </div>
           <div className="flex border-b border-zinc-800">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-[9px] font-bold bg-zinc-900 border-r border-zinc-800 px-1 leading-tight">流月支</div>
+            <div className="w-12 sm:w-16 flex items-center justify-center text-[11px] font-bold bg-zinc-900 border-r border-zinc-800 px-1 leading-tight">流月支</div>
             <div className="flex-1 grid grid-cols-12">
               {liuYueList.map((ly, i) => (
-                <div key={i} className="flex justify-center items-center py-1 border-r border-zinc-800 last:border-r-0 text-[10px] sm:text-xs">
+                <div key={i} className="flex justify-center items-center py-1 border-r border-zinc-800 last:border-r-0 text-xs sm:text-xs">
                   <span className={getBaziColorClass(ly.getGanZhi()[1])}>{ly.getGanZhi()[1]}</span>
                 </div>
               ))}
@@ -836,9 +882,9 @@ export default function App() {
             { label: "空亡", items: [eightChar.getTimeXunKong(), eightChar.getDayXunKong(), eightChar.getMonthXunKong(), eightChar.getYearXunKong(), "申酉", "寅卯"] },
           ].map((row, rowIdx) => (
             <div key={rowIdx} className={cn("flex border-b border-zinc-800 bg-zinc-900/30", rowIdx === 2 && "border-b-0")}>
-              <div className="w-12 sm:w-16 flex items-center justify-center text-[10px] font-bold bg-zinc-900 border-r border-zinc-800">{row.label}</div>
+              <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">{row.label}</div>
               {row.items.map((val, colIdx) => (
-                <div key={colIdx} className="flex-1 flex items-center justify-center py-1 sm:py-2 px-1 text-[9px] sm:text-[10px] text-zinc-400 border-r border-zinc-800 last:border-r-0 text-center">
+                <div key={colIdx} className="flex-1 flex items-center justify-center py-1 sm:py-2 px-1 text-[10px] sm:text-[11px] text-zinc-400 border-r border-zinc-800 last:border-r-0 text-center">
                   {val}
                 </div>
               ))}
@@ -1499,7 +1545,7 @@ export default function App() {
 
                            <div className="relative z-10 flex flex-col items-center">
                               <h3 className="text-sm font-black text-white uppercase tracking-widest mb-1">泰式命宫巡环</h3>
-                              <p className="text-[10px] text-zinc-500 font-bold">性别: {gender === 1 ? "男 (乾)" : "女 (坤)"} | 当前岁数: <span className="text-gold">{age}</span> 岁</p>
+                              <p className="text-xs text-zinc-500 font-bold">性别: {gender === 1 ? "男 (乾)" : "女 (坤)"} | 当前岁数: <span className="text-gold">{age}</span> 岁</p>
                            </div>
 
                            {/* The Wheel */}
@@ -1576,7 +1622,7 @@ export default function App() {
                            </div>
 
                            {/* Arrows Indicator */}
-                           <div className="flex gap-8 text-[9px] font-black uppercase tracking-widest text-zinc-600 border-t border-zinc-800/50 pt-4 w-full justify-center">
+                           <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-zinc-600 border-t border-zinc-800/50 pt-4 w-full justify-center">
                               <div className={cn("flex items-center gap-1.5", gender === 0 && "text-gold")}>
                                  <ChevronLeft className="w-3 h-3" /> หญิง (女) 顺时针
                               </div>
@@ -1596,8 +1642,8 @@ export default function App() {
                               <table className="w-full text-left border-collapse">
                                  <thead className="bg-black/20">
                                     <tr className="border-b border-zinc-800">
-                                       <th className="p-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest w-24">象征</th>
-                                       <th className="p-3 text-[10px] font-black text-zinc-500 uppercase tracking-widest">详情解释</th>
+                                       <th className="p-3 text-xs font-black text-zinc-500 uppercase tracking-widest w-24">象征</th>
+                                       <th className="p-3 text-xs font-black text-zinc-500 uppercase tracking-widest">详情解释</th>
                                     </tr>
                                  </thead>
                                  <tbody className="divide-y divide-zinc-800/50">
