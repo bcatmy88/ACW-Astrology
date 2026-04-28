@@ -281,17 +281,17 @@ function DestinyCard({ client, onReplace }: { client: SavedClient, onReplace: ()
         {/* NUMEROLOGY & ASTROLOGY ROW */}
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
-            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <span className="text-[9px] font-black text-white uppercase tracking-widest flex items-center gap-2">
               <Hash className="w-3 h-3" /> 数字学 (Numbers)
             </span>
             <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl flex items-center justify-center gap-4">
               <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black text-zinc-600 uppercase mb-1">主性格</span>
+                <span className="text-[8px] font-black text-white uppercase mb-1">主性格</span>
                 <span className="text-xl font-black text-gold leading-none">{numerology.core}</span>
               </div>
               <div className="w-[1px] h-8 bg-zinc-800" />
                <div className="flex flex-col items-center">
-                <span className="text-[8px] font-black text-zinc-600 uppercase mb-1">潜意识</span>
+                <span className="text-[8px] font-black text-white uppercase mb-1">潜意识</span>
                 <span className="text-xl font-black text-zinc-400 leading-none">{numerology.essence}</span>
               </div>
             </div>
@@ -415,10 +415,10 @@ function RelationshipCompareView({ p1, p2, onReplaceP1, onReplaceP2 }: { p1: Sav
       title: "四柱八字 (Bazi)",
       icon: Zap,
       rows: [
-        { label: "年柱", val1: prof1.eightChar.getYear(), val2: prof2.eightChar.getYear() },
-        { label: "月柱", val1: prof1.eightChar.getMonth(), val2: prof2.eightChar.getMonth() },
-        { label: "日柱", val1: prof1.eightChar.getDay(), val2: prof2.eightChar.getDay() },
         { label: "时柱", val1: prof1.eightChar.getTime(), val2: prof2.eightChar.getTime() },
+        { label: "日柱", val1: prof1.eightChar.getDay(), val2: prof2.eightChar.getDay() },
+        { label: "月柱", val1: prof1.eightChar.getMonth(), val2: prof2.eightChar.getMonth() },
+        { label: "年柱", val1: prof1.eightChar.getYear(), val2: prof2.eightChar.getYear() },
         { label: "流年", val1: prof1.liuNian.getGanZhi(), val2: prof2.liuNian.getGanZhi(), isSpecial: true },
       ]
     },
@@ -1001,7 +1001,7 @@ export default function App() {
         {/* VIEW 1: CLIENT LIST (FRONT PAGE) */}
         {view === 'list' && (
           <div className="flex flex-col gap-4 relative">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-11 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setIsSideMenuOpen(true)}
@@ -1083,13 +1083,13 @@ export default function App() {
               const mSolar = Solar.fromYmdHms(y, m, d, hh, mm, 0);
               const mLunar = mSolar.getLunar();
               const mEightChar = mLunar.getEightChar();
-              const mBazi = [mEightChar.getYear(), mEightChar.getMonth(), mEightChar.getDay(), mEightChar.getTime()];
+              const mBazi = [mEightChar.getTime(), mEightChar.getDay(), mEightChar.getMonth(), mEightChar.getYear()];
 
               // Current Bazi
               const nowSolar = Solar.fromDate(new Date());
               const nowLunar = nowSolar.getLunar();
               const nowEightChar = nowLunar.getEightChar();
-              const currentBazi = [nowEightChar.getYear(), nowEightChar.getMonth(), nowEightChar.getDay()];
+              const currentBazi = [nowEightChar.getDay(), nowEightChar.getMonth(), nowEightChar.getYear()];
 
               // Numerology Calculation for Main User
               const yRoot = getRootDigit(y);
@@ -1145,33 +1145,33 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     {/* Bazi Preview - Super Compact */}
-                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-2 rounded-xl flex flex-col gap-1.5">
-                       <span className="text-[9px] font-black text-white uppercase tracking-tighter flex items-center gap-1">
-                         <LayoutGrid className="w-2.5 h-2.5" /> 本命
+                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-3 rounded-xl flex flex-col gap-2">
+                       <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
+                         <LayoutGrid className="w-3.5 h-3.5" /> 本命
                        </span>
-                       <div className="flex justify-between items-center px-1">
+                       <div className="grid grid-cols-4 items-center">
                          {mBazi.map((pair, i) => (
                            <div key={i} className="flex flex-col items-center leading-none">
-                             <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
-                             <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
+                             <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
+                             <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
                            </div>
                          ))}
                        </div>
                     </div>
 
                     {/* Current Energy - Super Compact */}
-                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-2 rounded-xl flex flex-col gap-1.5">
-                       <span className="text-[9px] font-black text-white uppercase tracking-tighter flex items-center gap-1">
-                         <Zap className="w-2.5 h-2.5" /> 流日
+                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-3 rounded-xl flex flex-col gap-2">
+                       <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
+                         <Zap className="w-3.5 h-3.5" /> 流日
                        </span>
-                       <div className="flex justify-between items-center px-0.5">
+                       <div className="grid grid-cols-3 items-center">
                          {currentBazi.map((pair, i) => (
                            <div key={i} className="flex flex-col items-center">
                              <div className="flex flex-col items-center leading-none">
-                               <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
-                               <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
+                               <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
+                               <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
                              </div>
                            </div>
                          ))}
@@ -1179,26 +1179,26 @@ export default function App() {
                     </div>
 
                     {/* Numerology Daily - Super Compact */}
-                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-2 rounded-xl flex flex-col gap-1.5">
-                       <span className="text-[9px] font-black text-white uppercase tracking-tighter flex items-center gap-1">
-                         <Hash className="w-2.5 h-2.5" /> 数字
+                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-3 rounded-xl flex flex-col gap-2">
+                       <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
+                         <Hash className="w-3.5 h-3.5" /> 数字
                        </span>
-                       <div className="flex justify-between items-center px-1">
+                       <div className="grid grid-cols-4 items-center">
                          <div className="flex flex-col items-center">
-                           <span className="text-sm font-black text-white leading-none">{coreNumber}</span>
-                           <span className="text-[8px] text-white font-bold mt-1">核心</span>
+                           <span className="text-base sm:text-lg font-black text-white leading-none">{coreNumber}</span>
+                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">核心</span>
                          </div>
                          <div className="flex flex-col items-center">
-                           <span className="text-sm font-black text-gold leading-none">{numYear}</span>
-                           <span className="text-[8px] text-white font-bold mt-1">流年</span>
+                           <span className="text-base sm:text-lg font-black text-white leading-none">{numYear}</span>
+                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流年</span>
                          </div>
                          <div className="flex flex-col items-center">
-                           <span className="text-sm font-black text-white leading-none">{numMonth}</span>
-                           <span className="text-[8px] text-white font-bold mt-1">流月</span>
+                           <span className="text-base sm:text-lg font-black text-white leading-none">{numMonth}</span>
+                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流月</span>
                          </div>
                          <div className="flex flex-col items-center">
-                           <span className="text-sm font-black text-white leading-none">{numDay}</span>
-                           <span className="text-[8px] text-white font-bold mt-1">流日</span>
+                           <span className="text-base sm:text-lg font-black text-white leading-none">{numDay}</span>
+                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流日</span>
                          </div>
                        </div>
                     </div>
@@ -1291,7 +1291,7 @@ export default function App() {
         {/* VIEW 2: ADD NEW CLIENT FORM */}
         {view === 'form' && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4 py-2">
+            <div className="flex items-center gap-4 pt-12 pb-2">
               <button 
                 onClick={() => setView('list')}
                 className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-90 transition-all"
@@ -1407,7 +1407,7 @@ export default function App() {
         {/* VIEW 3: ANALYSIS VIEW (THE BAZI GRID) */}
         {view === 'analyze' && (
           <div className="flex flex-col gap-4">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-11 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
               <button 
                 onClick={() => {
                   setCurrentAnalysisClientId(null);
@@ -1449,11 +1449,11 @@ export default function App() {
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">生日日期 (阳历 Solar)</span>
-                <span className="text-xs font-bold text-zinc-300">{solar.toYmd()} {birthTime}</span>
+                <span className="text-sm font-bold text-zinc-300">{solar.toYmd()} {birthTime}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">生日日期 (农历 Lunar)</span>
-                <span className="text-xs font-bold text-zinc-300">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
+                <span className="text-sm font-bold text-zinc-300">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
               </div>
             </div>
 
@@ -1714,46 +1714,46 @@ export default function App() {
                   {/* CHART PART */}
                   <div className="flex flex-col">
                     {/* Row 1: Headers */}
-                    <div className="flex bg-zinc-800 border-b border-zinc-700 h-8 sm:h-10">
-                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-black border-r border-zinc-700 text-zinc-400 uppercase">日期</div>
-                      {["流日", "流月", "流年", "大运", "年柱", "月柱", "日柱", "时柱"].map((label, idx) => (
-                        <div key={idx} className="flex-1 flex items-center justify-center text-[9px] font-black border-r border-zinc-700 last:border-r-0 text-zinc-300 uppercase">{label}</div>
+                    <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 text-zinc-400 uppercase">日期</div>
+                      {["时柱", "日柱", "月柱", "年柱", "大运", "流年", "流月", "流日"].map((label, idx) => (
+                        <div key={idx} className="flex-1 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 last:border-r-0 text-zinc-300 uppercase">{label}</div>
                       ))}
                     </div>
 
                     {/* Row 2: Age/Year */}
-                    <div className="flex bg-zinc-950 border-b border-zinc-800 h-10 sm:h-12">
-                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-bold border-r border-zinc-800 leading-tight whitespace-pre-wrap text-zinc-500 uppercase">岁\n年</div>
+                    <div className="flex bg-zinc-950 border-b border-zinc-800 h-12 sm:h-14">
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-bold border-r border-zinc-800 leading-tight whitespace-pre-wrap text-zinc-500 uppercase">岁\n年</div>
                       {[
-                        { val: `${(currentLiuRi as any).getLunarDay ? (currentLiuRi as any).getLunarDay() : ''}\n${currentLiuRi.getDay()}日` },
-                        { val: `${currentLiuYue.getIndex() + 1}月` },
-                        { val: `${currentLiuNian.getYear() - solar.getYear() + 1}岁\n${currentLiuNian.getYear()}年` },
-                        { val: `${Math.floor(currentDaYun.getStartAge())}岁\n${currentDaYun.getStartYear()}年` },
                         { val: "*" }, { val: "*" }, { val: "*" }, { val: "*" },
+                        { val: `${Math.floor(currentDaYun.getStartAge())}岁\n${currentDaYun.getStartYear()}年` },
+                        { val: `${currentLiuNian.getYear() - solar.getYear() + 1}岁\n${currentLiuNian.getYear()}年` },
+                        { val: `${currentLiuYue.getIndex() + 1}月` },
+                        { val: `${(currentLiuRi as any).getLunarDay ? (currentLiuRi as any).getLunarDay() : ''}\n${currentLiuRi.getDay()}日` },
                       ].map((item, idx) => (
                         <div key={idx} className="flex-1 flex items-center justify-center border-r border-zinc-800 text-center leading-tight last:border-r-0">
-                          <div className="text-[9px] font-bold text-white whitespace-pre-wrap">{(item as any).val}</div>
+                          <div className="text-[10px] font-bold text-white whitespace-pre-wrap">{(item as any).val}</div>
                         </div>
                       ))}
                     </div>
 
                     {/* Row 3: Stems */}
                     <div className="flex bg-zinc-950 border-b border-zinc-900">
-                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-bold bg-zinc-900 border-r border-zinc-800 uppercase">天干</div>
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-bold bg-zinc-900 border-r border-zinc-800 uppercase">天干</div>
                       {[
-                        { gan: currentLiuRi.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuRi.getGanZhi().substring(0,1)) },
-                        { gan: currentLiuYue.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuYue.getGanZhi().substring(0,1)) },
-                        { gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
-                        { gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
-                        { gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
-                        { gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
-                        { gan: eightChar.getDayGan(), ss: "元男" },
                         { gan: (eightChar as any).getHour ? (eightChar as any).getHour().substring(0,1) : eightChar.getTime().substring(0,1), ss: eightChar.getTimeShiShenGan() },
+                        { gan: eightChar.getDayGan(), ss: "元男" },
+                        { gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
+                        { gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
+                        { gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
+                        { gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
+                        { gan: currentLiuYue.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuYue.getGanZhi().substring(0,1)) },
+                        { gan: currentLiuRi.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuRi.getGanZhi().substring(0,1)) },
                       ].map((item, idx) => (
-                        <div key={idx} className="flex-1 flex items-center justify-center relative py-2.5 border-r border-zinc-800 last:border-r-0">
-                          <span className={cn("text-lg sm:text-xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
+                        <div key={idx} className="flex-1 flex items-center justify-center relative py-3 border-r border-zinc-800 last:border-r-0">
+                          <span className={cn("text-xl sm:text-2xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
                           <div className="absolute top-0.5 right-0.5 flex flex-col items-center">
-                            <span className="text-[7px] sm:text-[8px] font-bold text-zinc-400 leading-none">{getShiShenShort(item.ss)}</span>
+                            <span className="text-[8px] sm:text-[9px] font-bold text-zinc-400 leading-none">{getShiShenShort(item.ss)}</span>
                           </div>
                         </div>
                       ))}
@@ -1761,21 +1761,21 @@ export default function App() {
 
                     {/* Row 4: Branches */}
                     <div className="flex bg-zinc-900/50 border-b border-zinc-800">
-                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-bold bg-zinc-900 border-r border-zinc-800 uppercase">地支</div>
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-bold bg-zinc-900 border-r border-zinc-800 uppercase">地支</div>
                       {[
-                        { zhi: currentLiuRi.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuRi.getGanZhi().substring(1,2)) },
-                        { zhi: currentLiuYue.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuYue.getGanZhi().substring(1,2)) },
-                        { zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
-                        { zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
-                        { zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
-                        { zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
-                        { zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
                         { zhi: (eightChar as any).getHour ? (eightChar as any).getHour().substring(1,2) : eightChar.getTime().substring(1,2), sss: eightChar.getTimeShiShenZhi() },
+                        { zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
+                        { zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
+                        { zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
+                        { zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
+                        { zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
+                        { zhi: currentLiuYue.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuYue.getGanZhi().substring(1,2)) },
+                        { zhi: currentLiuRi.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuRi.getGanZhi().substring(1,2)) },
                       ].map((item, idx) => (
-                        <div key={idx} className="flex-1 flex items-center justify-center relative py-2.5 border-r border-zinc-800 last:border-r-0">
-                          <span className={cn("text-lg sm:text-xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
+                        <div key={idx} className="flex-1 flex items-center justify-center relative py-3 border-r border-zinc-800 last:border-r-0">
+                          <span className={cn("text-xl sm:text-2xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
                           <div className="absolute top-0.5 right-0.5 flex flex-col items-end">
-                            {item.sss.map((s, i) => <span key={i} className="text-[7px] sm:text-[8px] font-bold text-zinc-500 leading-none">{getShiShenShort(s)}</span>)}
+                            {item.sss.map((s, i) => <span key={i} className="text-[8px] sm:text-[9px] font-bold text-zinc-500 leading-none">{getShiShenShort(s)}</span>)}
                           </div>
                         </div>
                       ))}
@@ -1789,7 +1789,7 @@ export default function App() {
                       <tbody>
                         {/* 流月 Row */}
                         <tr className="bg-zinc-800/80">
-                          <td className="w-10 shrink-0 p-2 text-[10px] font-black text-white border-r border-zinc-700 text-center bg-zinc-900 uppercase">流月</td>
+                          <td className="w-10 shrink-0 p-2 text-xs font-black text-white border-r border-zinc-700 text-center bg-zinc-900 uppercase">流月</td>
                           {['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'].map((term, idx) => {
                             const isActive = selectedYueIndex === idx;
                             const ly = liuYueList[idx];
@@ -1805,12 +1805,12 @@ export default function App() {
                                 )}
                               >
                                 <div className="flex flex-col items-center">
-                                  <span className={cn("text-[8px] sm:text-[9px] font-bold", isActive ? "text-white" : "text-zinc-500")}>
+                                  <span className={cn("text-[9px] sm:text-[10px] font-bold", isActive ? "text-white" : "text-zinc-500")}>
                                     {term}
                                   </span>
-                                  <div className="flex flex-col items-center justify-center leading-none mt-0.5">
-                                    <span className={cn("text-sm sm:text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(gan))}>{gan}</span>
-                                    <span className={cn("text-sm sm:text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(zhi))}>{zhi}</span>
+                                  <div className="flex flex-col items-center justify-center leading-none mt-1">
+                                    <span className={cn("text-base sm:text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(gan))}>{gan}</span>
+                                    <span className={cn("text-base sm:text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(zhi))}>{zhi}</span>
                                   </div>
                                 </div>
                               </td>
@@ -1820,7 +1820,7 @@ export default function App() {
                         
                         {/* 流日 Row - Shared Scroll Container for Date & Pillar */}
                         <tr className="bg-zinc-950 border-t border-zinc-800">
-                          <td className="w-10 p-2 text-[10px] font-black text-white border-r border-zinc-800 text-center bg-zinc-900 uppercase">流日</td>
+                          <td className="w-10 p-2 text-xs font-black text-white border-r border-zinc-800 text-center bg-zinc-900 uppercase">流日</td>
                           <td colSpan={12} className="p-0 border-r border-zinc-800">
                             {/* Unified Scrollable Container */}
                             <div className="flex overflow-x-auto custom-scrollbar-grey w-full scrollbar-gutter-stable">
@@ -1835,14 +1835,14 @@ export default function App() {
                                       key={idx} 
                                       onClick={() => setSelectedRiIndex(idx)}
                                       className={cn(
-                                        "min-w-[44px] sm:min-w-[56px] border-r border-zinc-800 cursor-pointer transition-colors shrink-0 flex flex-col items-center py-2",
+                                        "min-w-[48px] sm:min-w-[60px] border-r border-zinc-800 cursor-pointer transition-colors shrink-0 flex flex-col items-center py-3",
                                         isActive ? "bg-zinc-600 shadow-inner" : "hover:bg-zinc-800/30"
                                       )}
                                     >
-                                      <span className={cn("text-[9px] font-black mb-1", isActive ? "text-white" : "text-zinc-600")}>{lunarDayName}</span>
+                                      <span className={cn("text-[10px] font-black mb-1.5", isActive ? "text-white" : "text-zinc-600")}>{lunarDayName}</span>
                                       <div className="flex flex-col items-center leading-tight">
-                                        <span className={cn("text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(gan))}>{gan}</span>
-                                        <span className={cn("text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(zhi))}>{zhi}</span>
+                                        <span className={cn("text-xl font-serif font-black", isActive ? "text-white" : getBaziColorClass(gan))}>{gan}</span>
+                                        <span className={cn("text-xl font-serif font-black", isActive ? "text-white" : getBaziColorClass(zhi))}>{zhi}</span>
                                       </div>
                                     </div>
                                   );
@@ -1862,7 +1862,7 @@ export default function App() {
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
                   <div className="bg-zinc-800 px-4 py-3 border-b border-zinc-700">
                     <h3 className="text-sm font-black text-white flex items-center gap-2">
-                      <Hash className="w-4 h-4 text-gold" />
+                      <Hash className="w-4 h-4 text-white" />
                       数字学 NUMEROLOGY
                     </h3>
                   </div>
@@ -1876,7 +1876,7 @@ export default function App() {
                         { label: '核心数', value: '?', color: 'text-gold' }
                       ].map((item, i) => (
                         <div key={i} className="bg-black/40 border border-zinc-800 p-2 rounded-lg flex flex-col items-center">
-                          <span className="text-[10px] text-gold/80 font-bold uppercase tracking-tighter mb-1">{item.label}</span>
+                          <span className="text-[10px] text-white font-bold uppercase tracking-tighter mb-1">{item.label}</span>
                           <span className={cn("text-xl font-black", item.color)}>{item.value === '?' ? getRootDigit(birthDate) : item.value}</span>
                         </div>
                       ))}
@@ -1886,9 +1886,9 @@ export default function App() {
                       <table className="w-full border-collapse border border-zinc-800">
                         <thead>
                           <tr className="bg-zinc-800/80">
-                            <th className="p-2 border border-zinc-700 text-[10px] font-black text-gold sticky left-0 bg-zinc-800 z-10 min-w-16">类别</th>
+                            <th className="p-3 border border-zinc-700 text-xs font-black text-white sticky left-0 bg-zinc-800 z-10 min-w-16">类别</th>
                             {[...Array(12)].map((_, i) => (
-                              <th key={i} className="p-2 border border-zinc-700 text-[10px] font-black text-gold min-w-10">{i + 1}月</th>
+                              <th key={i} className="p-3 border border-zinc-700 text-xs font-black text-white min-w-10">{i + 1}月</th>
                             ))}
                           </tr>
                         </thead>
@@ -1933,7 +1933,7 @@ export default function App() {
 
                             return matrixRows.map((row, idx) => (
                               <tr key={idx} className="hover:bg-zinc-800/30">
-                                <td className="p-2 border border-zinc-800 text-[10px] font-bold text-gold sticky left-0 bg-zinc-900/95 z-10">{row.label}</td>
+                                <td className="p-3 border border-zinc-800 text-xs font-bold text-white sticky left-0 bg-zinc-900/95 z-10">{row.label}</td>
                                 {[...Array(12)].map((_, mIdx) => {
                                   const monthNum = mIdx + 1;
                                   const monthlyFlowVal = getRootDigit(coreVal.toString() + currentYear.toString() + monthNum.toString());
@@ -1944,7 +1944,6 @@ export default function App() {
 
                                   if (row.type === 'year') {
                                     val = getRootDigit(coreVal.toString() + currentYear.toString());
-                                    // User didn't specify circling for year flow
                                   } else if (row.type === 'month') {
                                     val = monthlyFlowVal;
                                     isMatched = matchesBase;
@@ -1956,12 +1955,12 @@ export default function App() {
                                   return (
                                     <td key={mIdx} className="p-1 border border-zinc-800 text-center">
                                       <div className={cn(
-                                        "inline-flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300",
-                                        isMatched ? "border-2 border-gold/50 bg-gold/10 shadow-[0_0_8px_rgba(255,215,0,0.3)]" : ""
+                                        "inline-flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300",
+                                        isMatched ? "border-2 border-green-500/50 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.3)]" : ""
                                       )}>
                                         <span className={cn(
-                                          "text-sm font-black",
-                                          isMatched ? "text-gold" : (row.type === 'month' ? "text-gold" : "text-gold/40")
+                                          "text-base font-black",
+                                          isMatched ? "text-green-500" : (row.type === 'month' ? "text-gold" : "text-white/40")
                                         )}>
                                           {val}
                                         </span>
@@ -1979,8 +1978,8 @@ export default function App() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="border-b border-zinc-800">
-                          <th className="py-2 text-left text-[10px] font-black text-gold uppercase tracking-widest">项目</th>
-                          <th className="py-2 text-right text-[10px] font-black text-gold uppercase tracking-widest">计算公式</th>
+                          <th className="py-2 text-left text-xs font-black text-white uppercase tracking-widest">项目</th>
+                          <th className="py-2 text-right text-xs font-black text-white uppercase tracking-widest">计算公式</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/50">
@@ -2013,12 +2012,12 @@ export default function App() {
 
                             return calculations.map((row) => (
                               <tr key={row.id} className="hover:bg-zinc-800/30 transition-colors">
-                                <td className="py-3 text-xs font-bold text-gold">
+                                <td className="py-3 text-sm font-bold text-white">
                                   {row.label}
                                 </td>
-                                <td className="py-3 text-right text-[10px] font-mono text-zinc-500 whitespace-nowrap">
-                                  {row.formula} = <span className="text-gold font-black text-lg mx-1">{row.root}</span>
-                                  <span className="text-gold/60 font-black text-[11px]">({PLANET_MAP[row.root]})</span>
+                                <td className="py-3 text-right text-[11px] font-mono text-gold whitespace-nowrap">
+                                  {row.formula} = <span className="text-gold font-black text-xl mx-1">{row.root}</span>
+                                  <span className="text-white font-black text-xs">({PLANET_MAP[row.root]})</span>
                                 </td>
                               </tr>
                             ));
@@ -2547,7 +2546,7 @@ export default function App() {
       {/* VIEW 4: SHUANG HE PAN */}
       {view === 'shuanghepan' && (
         <div className="max-w-[800px] mx-auto flex flex-col gap-6">
-          <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
+          <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-11 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setIsSideMenuOpen(true)}
