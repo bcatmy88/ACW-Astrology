@@ -1156,12 +1156,18 @@ export default function App() {
                          <LayoutGrid className="w-3.5 h-3.5" /> 本命
                        </span>
                        <div className="grid grid-cols-4 items-center">
-                         {mBazi.map((pair, i) => (
-                           <div key={i} className="flex flex-col items-center leading-none">
-                             <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
-                             <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
-                           </div>
-                         ))}
+                         {mBazi.map((pair, i) => {
+                           const labels = ['时柱', '日柱', '月柱', '年柱'];
+                           return (
+                             <div key={i} className="flex flex-col items-center">
+                               <div className="flex flex-col items-center leading-none mb-1">
+                                 <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
+                                 <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
+                               </div>
+                               <span className="text-[8px] text-white/40 font-bold">{labels[i]}</span>
+                             </div>
+                           );
+                         })}
                        </div>
                     </div>
 
@@ -1190,20 +1196,28 @@ export default function App() {
                        </span>
                         <div className="grid grid-cols-4 items-center">
                           <div className="flex flex-col items-center">
-                            <span className="text-base sm:text-lg font-black text-white leading-none">{coreNumber}</span>
-                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">核心</span>
+                            <div className="mb-1 leading-none text-center">
+                              <span className="text-base sm:text-lg font-black text-white">{coreNumber}</span>
+                            </div>
+                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">核心</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <span className="text-base sm:text-lg font-black text-white leading-none">{numYear}</span>
-                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流年</span>
+                            <div className="mb-1 leading-none text-center">
+                              <span className="text-base sm:text-lg font-black text-white">{numYear}</span>
+                            </div>
+                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流年</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <span className="text-base sm:text-lg font-black text-white leading-none">{numMonth}</span>
-                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流月</span>
+                            <div className="mb-1 leading-none text-center">
+                              <span className="text-base sm:text-lg font-black text-white">{numMonth}</span>
+                            </div>
+                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流月</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <span className="text-base sm:text-lg font-black text-white leading-none">{numDay}</span>
-                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流日</span>
+                            <div className="mb-1 leading-none text-center">
+                              <span className="text-base sm:text-lg font-black text-white">{numDay}</span>
+                            </div>
+                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流日</span>
                           </div>
                         </div>
                     </div>
