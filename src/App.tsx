@@ -1089,7 +1089,11 @@ export default function App() {
               const nowSolar = Solar.fromDate(new Date());
               const nowLunar = nowSolar.getLunar();
               const nowEightChar = nowLunar.getEightChar();
-              const currentBazi = [nowEightChar.getDay(), nowEightChar.getMonth(), nowEightChar.getYear()];
+              const currentBazi = [
+                { label: '流年', bazi: nowEightChar.getYear() },
+                { label: '流月', bazi: nowEightChar.getMonth() },
+                { label: '流日', bazi: nowEightChar.getDay() }
+              ];
 
               // Numerology Calculation for Main User
               const yRoot = getRootDigit(y);
@@ -1167,12 +1171,13 @@ export default function App() {
                          <Zap className="w-3.5 h-3.5" /> 流日
                        </span>
                        <div className="grid grid-cols-3 items-center">
-                         {currentBazi.map((pair, i) => (
+                         {currentBazi.map((item: any, i: number) => (
                            <div key={i} className="flex flex-col items-center">
-                             <div className="flex flex-col items-center leading-none">
-                               <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
-                               <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
+                             <div className="flex flex-col items-center leading-none mb-1">
+                               <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(item.bazi[0]))}>{item.bazi[0]}</span>
+                               <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(item.bazi[1]))}>{item.bazi[1]}</span>
                              </div>
+                             <span className="text-[8px] text-white/40 font-bold">{item.label}</span>
                            </div>
                          ))}
                        </div>
@@ -1183,24 +1188,24 @@ export default function App() {
                        <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
                          <Hash className="w-3.5 h-3.5" /> 数字
                        </span>
-                       <div className="grid grid-cols-4 items-center">
-                         <div className="flex flex-col items-center">
-                           <span className="text-base sm:text-lg font-black text-white leading-none">{coreNumber}</span>
-                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">核心</span>
-                         </div>
-                         <div className="flex flex-col items-center">
-                           <span className="text-base sm:text-lg font-black text-white leading-none">{numYear}</span>
-                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流年</span>
-                         </div>
-                         <div className="flex flex-col items-center">
-                           <span className="text-base sm:text-lg font-black text-white leading-none">{numMonth}</span>
-                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流月</span>
-                         </div>
-                         <div className="flex flex-col items-center">
-                           <span className="text-base sm:text-lg font-black text-white leading-none">{numDay}</span>
-                           <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流日</span>
-                         </div>
-                       </div>
+                        <div className="grid grid-cols-4 items-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-base sm:text-lg font-black text-white leading-none">{coreNumber}</span>
+                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">核心</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-base sm:text-lg font-black text-white leading-none">{numYear}</span>
+                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流年</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-base sm:text-lg font-black text-white leading-none">{numMonth}</span>
+                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流月</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <span className="text-base sm:text-lg font-black text-white leading-none">{numDay}</span>
+                            <span className="text-[8px] text-white font-bold mt-1 whitespace-nowrap">流日</span>
+                          </div>
+                        </div>
                     </div>
                   </div>
                 </div>
