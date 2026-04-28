@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Solar, Lunar, EightChar, DaYun, LiuNian, LiuYue } from 'lunar-javascript';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus,
   Hash,
@@ -31,7 +32,8 @@ import {
   Trophy,
   Home,
   Skull,
-  Shield
+  Shield,
+  Menu
 } from 'lucide-react';
 import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
@@ -184,10 +186,378 @@ const getShiShenShort = (full: string) => {
   return mapping[full] || full;
 };
 
+function DestinyCard({ client, onReplace }: { client: SavedClient, onReplace: () => void }) {
+  const profile = useMemo(() => {
+    try {
+      const [y, m, d] = client.birthDate.split('-').map(Number);
+      const [hh, mm] = client.birthTime.split(':').map(Number);
+      const solar = Solar.fromYmdHms(y, m, d, hh, mm, 0);
+      const lunar = solar.getLunar();
+      const eightChar = lunar.getEightChar();
+      const genderNum = client.gender === 'male' ? 1 : 0;
+      
+      // 1. Numerology
+      const yearRoot = getRootDigit(y);
+      const monthRoot = getRootDigit(m);
+      const dayRoot = getRootDigit(d);
+      const coreRoot = getRootDigit(yearRoot + monthRoot + dayRoot);
+      const essenceRoot = getRootDigit(hh);
+
+      // 2. Astrology (Simplified for card)
+      const dateUTC = new Date(Date.UTC(y, m - 1, d, hh - 8, mm)); // Default +8
+      const timeAstronomy = Astronomy.MakeTime(dateUTC);
+      const sunLon = Astronomy.SunPosition(timeAstronomy).elon;
+      const sunSign = ZODIAC_SIGNS[Math.floor(sunLon / 30)];
+      
+      // 3. Thai 12 Houses
+      const age = calculateWesternAge(client.birthDate);
+      const count = age === 0 ? 1 : age;
+      let houseIndex = 0;
+      if (genderNum === 1) {
+        houseIndex = (12 - (count - 1) % 12) % 12;
+      } else {
+        houseIndex = (count - 1) % 12;
+      }
+      const thaiSymbol = THAI_DESTINY_SYMBOLS[houseIndex];
+
+      return {
+        eightChar,
+        dayGan: eightChar.getDayGan(),
+        numerology: { core: coreRoot, essence: essenceRoot },
+        astrology: { sunSign },
+        thaiSymbol,
+        age
+      };
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  }, [client]);
+
+  if (!profile) return null;
+
+  const { eightChar, dayGan, numerology, astrology, thaiSymbol, age } = profile;
+  const baziChars = [
+    { label: '年', gan: eightChar.getYearGan(), zhi: eightChar.getYearZhi() },
+    { label: '月', gan: eightChar.getMonthGan(), zhi: eightChar.getMonthZhi() },
+    { label: '日', gan: eightChar.getDayGan(), zhi: eightChar.getDayZhi() },
+    { label: '时', gan: eightChar.getTimeGan(), zhi: eightChar.getTimeZhi() },
+  ];
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col group h-full">
+      <div className="bg-zinc-800/80 p-4 border-b border-zinc-700 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-zinc-950 border border-gold/30 flex items-center justify-center text-gold font-black shadow-lg">
+            {client.name[0]}
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-black text-white uppercase">{client.name}</span>
+            <span className="text-[10px] text-gold font-bold">{age} 岁 | {client.gender === 'male' ? '乾造' : '坤造'}</span>
+          </div>
+        </div>
+        <button onClick={onReplace} className="p-2 hover:bg-zinc-700 rounded-lg text-zinc-500 hover:text-white transition-colors">
+          <History className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="p-5 flex flex-col gap-6">
+        {/* BAZI STACK */}
+        <div className="flex flex-col gap-2">
+          <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <Zap className="w-3 h-3" /> 八字命元 (Bazi)
+          </span>
+          <div className="grid grid-cols-4 gap-1">
+            {baziChars.reverse().map((char, idx) => (
+              <div key={idx} className="bg-zinc-950 border border-zinc-800 p-2 rounded-xl flex flex-col items-center gap-1">
+                <span className="text-[8px] font-black text-zinc-600 uppercase">{char.label}</span>
+                <span className={cn("text-lg font-black leading-none", getBaziColorClass(char.gan))}>{char.gan}</span>
+                <span className={cn("text-lg font-black leading-none", getBaziColorClass(char.zhi))}>{char.zhi}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* NUMEROLOGY & ASTROLOGY ROW */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+              <Hash className="w-3 h-3" /> 数字学 (Numbers)
+            </span>
+            <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl flex items-center justify-center gap-4">
+              <div className="flex flex-col items-center">
+                <span className="text-[8px] font-black text-zinc-600 uppercase mb-1">主性格</span>
+                <span className="text-xl font-black text-gold leading-none">{numerology.core}</span>
+              </div>
+              <div className="w-[1px] h-8 bg-zinc-800" />
+               <div className="flex flex-col items-center">
+                <span className="text-[8px] font-black text-zinc-600 uppercase mb-1">潜意识</span>
+                <span className="text-xl font-black text-zinc-400 leading-none">{numerology.essence}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex flex-col gap-2">
+            <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+              <Star className="w-3 h-3" /> 西洋占星 (Zodiac)
+            </span>
+            <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-2xl flex items-center justify-center gap-3">
+              <span className="text-3xl leading-none text-white italic font-serif" style={{ filter: 'drop-shadow(0 0 5px rgba(212,175,55,0.4))' }}>
+                {astrology.sunSign.symbol}
+              </span>
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-zinc-200 uppercase">{astrology.sunSign.name}</span>
+                <span className="text-[8px] font-bold text-zinc-500 uppercase">{astrology.sunSign.eng}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* THAI HOUSES */}
+        <div className="flex flex-col gap-2">
+          <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+            <LayoutGrid className="w-3 h-3" /> 十二命宫巡环 (Thai Houses)
+          </span>
+          <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl flex items-center gap-4">
+            <div className={cn("w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-lg")}>
+              {(() => {
+                const icons: Record<string, any> = {
+                  Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield
+                };
+                const IconComp = icons[thaiSymbol.icon] || Star;
+                return <IconComp className={cn("w-6 h-6", thaiSymbol.color)} />;
+              })()}
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-white">{thaiSymbol.name}</span>
+                <span className="text-[10px] font-bold text-gold uppercase">{thaiSymbol.meaning}</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-medium leading-tight mt-1 line-clamp-2">{thaiSymbol.desc}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Relationship Compare View (Requested) ---
+function RelationshipCompareView({ p1, p2, onReplaceP1, onReplaceP2 }: { p1: SavedClient, p2: SavedClient, onReplaceP1: () => void, onReplaceP2: () => void }) {
+  const currentYear = new Date().getFullYear();
+
+  const getProfile = (client: SavedClient) => {
+    try {
+      const [y, m, d] = client.birthDate.split('-').map(Number);
+      const [hh, mm] = client.birthTime.split(':').map(Number);
+      const solar = Solar.fromYmdHms(y, m, d, hh, mm, 0);
+      const lunar = solar.getLunar();
+      const eightChar = lunar.getEightChar();
+      const genderNum = client.gender === 'male' ? 1 : 0;
+      const yun = eightChar.getYun(genderNum);
+
+      // Liu Nian for current year
+      const daYun = yun.getDaYun();
+      // Find LiuNian in any DaYun
+      let currentLiuNian = null;
+      for (const dy of daYun) {
+        const ln = dy.getLiuNian().find((l: any) => l.getYear() === currentYear);
+        if (ln) {
+          currentLiuNian = ln;
+          break;
+        }
+      }
+      if (!currentLiuNian) currentLiuNian = daYun[0].getLiuNian()[0];
+      
+      const currentLiuYue = currentLiuNian.getLiuYue().find((m: any) => (m.getIndex() + 1) === (new Date().getMonth() + 1)) || currentLiuNian.getLiuYue()[0];
+      
+      // Numerology
+      const yearRoot = getRootDigit(y);
+      const monthRoot = getRootDigit(m);
+      const dayRoot = getRootDigit(d);
+      const coreRoot = getRootDigit(yearRoot + monthRoot + dayRoot);
+      const currentYearRoot = getRootDigit(currentYear);
+      // Corrected: coreRoot + sum of current year digits
+      const personalYear = getRootDigit(coreRoot + currentYearRoot);
+
+      // Thai House (Current Year)
+      const ageAtCurrentYear = currentYear - y;
+      const count = ageAtCurrentYear === 0 ? 1 : ageAtCurrentYear + 1;
+      let houseIndex = 0;
+      if (genderNum === 1) {
+        houseIndex = (12 - (count - 1) % 12) % 12;
+      } else {
+        houseIndex = (count - 1) % 12;
+      }
+      const thaiSymbol = THAI_DESTINY_SYMBOLS[houseIndex];
+
+      return {
+        eightChar,
+        liuNian: currentLiuNian,
+        liuYue: currentLiuYue,
+        numerology: { core: coreRoot, personalYear },
+        thaiSymbol,
+        age: ageAtCurrentYear + 1
+      };
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  };
+
+  const prof1 = useMemo(() => getProfile(p1), [p1, currentYear]);
+  const prof2 = useMemo(() => getProfile(p2), [p2, currentYear]);
+
+  if (!prof1 || !prof2) return null;
+
+  const categories = [
+    {
+      title: "四柱八字 (Bazi)",
+      icon: Zap,
+      rows: [
+        { label: "年柱", val1: prof1.eightChar.getYear(), val2: prof2.eightChar.getYear() },
+        { label: "月柱", val1: prof1.eightChar.getMonth(), val2: prof2.eightChar.getMonth() },
+        { label: "日柱", val1: prof1.eightChar.getDay(), val2: prof2.eightChar.getDay() },
+        { label: "时柱", val1: prof1.eightChar.getTime(), val2: prof2.eightChar.getTime() },
+        { label: "流年", val1: prof1.liuNian.getGanZhi(), val2: prof2.liuNian.getGanZhi(), isSpecial: true },
+      ]
+    },
+    {
+      title: "生命数字 (Numerology)",
+      icon: Hash,
+      rows: [
+        { label: "核心数字", val1: prof1.numerology.core, val2: prof2.numerology.core },
+        { label: "流年数字", val1: prof1.numerology.personalYear, val2: prof2.numerology.personalYear, isSpecial: true },
+      ]
+    },
+    {
+      title: "十二命宫 (Thai Houses)",
+      icon: LayoutGrid,
+      rows: [
+        { 
+          label: "当前命宫", 
+          val1: prof1.thaiSymbol, 
+          val2: prof2.thaiSymbol, 
+          isThai: true 
+        },
+      ]
+    }
+  ];
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col w-full max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="bg-zinc-800/80 p-4 border-b border-zinc-700 grid grid-cols-[1fr_50px_1fr] items-center">
+        <div className="flex items-center gap-3 cursor-pointer hover:bg-zinc-700/50 p-2 rounded-xl transition-colors" onClick={onReplaceP1}>
+          <div className="w-12 h-12 rounded-full bg-zinc-950 border border-gold/30 flex items-center justify-center text-gold font-black text-sm shrink-0">
+            {p1.name[0]}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm sm:text-base font-black text-white uppercase truncate">{p1.name}</span>
+            <span className="text-[10px] sm:text-xs text-white font-bold">{p1.gender === 'male' ? '乾 (Male)' : '坤 (Female)'}</span>
+          </div>
+        </div>
+        <div className="flex justify-center">
+          <Link className="w-6 h-6 text-gold" />
+        </div>
+        <div className="flex items-center gap-3 justify-end cursor-pointer hover:bg-zinc-700/50 p-2 rounded-xl transition-colors text-right" onClick={onReplaceP2}>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm sm:text-base font-black text-white uppercase truncate">{p2.name}</span>
+            <span className="text-[10px] sm:text-xs text-white font-bold">{p2.gender === 'male' ? '乾 (Male)' : '坤 (Female)'}</span>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-zinc-950 border border-gold/30 flex items-center justify-center text-gold font-black text-sm shrink-0">
+            {p2.name[0]}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4 flex flex-col gap-6">
+        {categories.map((cat, idx) => (
+          <div key={idx} className="flex flex-col gap-2.5">
+            <span className="text-xs sm:text-sm font-black text-white uppercase tracking-widest flex items-center gap-2.5 px-1">
+              <cat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-gold" /> {cat.title}
+            </span>
+            <div className="bg-zinc-950 border border-zinc-800/50 rounded-2xl overflow-hidden divide-y divide-zinc-900 shadow-inner">
+              {cat.rows.map((row, rIdx) => (
+                <div key={rIdx} className={cn(
+                  "grid grid-cols-[80px_1fr_1fr] sm:grid-cols-[100px_1fr_1fr] items-center min-h-[50px]",
+                  row.isSpecial ? "bg-gold/10" : "bg-zinc-950"
+                )}>
+                  <div className="p-3 border-r border-zinc-900/50 bg-zinc-900/40 text-[10px] sm:text-xs font-black text-white uppercase tracking-tighter text-center">
+                    {row.label}
+                  </div>
+                  
+                  {row.isThai ? (
+                    <>
+                      <div className="p-3 border-r border-zinc-900/50 flex flex-col items-center gap-1.5">
+                        {(() => {
+                           const icons: Record<string, any> = { Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield };
+                           const Icon = icons[(row.val1 as any).icon] || Sparkles;
+                           return <Icon className={cn("w-6 h-6 sm:w-8 sm:h-8", (row.val1 as any).color)} />;
+                        })()}
+                        <span className="text-[10px] sm:text-xs font-black text-white text-center leading-tight">{(row.val1 as any).meaning}</span>
+                      </div>
+                      <div className="p-3 flex flex-col items-center gap-1.5">
+                        {(() => {
+                           const icons: Record<string, any> = { Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield };
+                           const Icon = icons[(row.val2 as any).icon] || Sparkles;
+                           return <Icon className={cn("w-6 h-6 sm:w-8 sm:h-8", (row.val2 as any).color)} />;
+                        })()}
+                        <span className="text-[10px] sm:text-xs font-black text-white text-center leading-tight">{(row.val2 as any).meaning}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="p-3 border-r border-zinc-900/50 text-center">
+                        <span className={cn(
+                          "text-sm sm:text-lg font-black",
+                          typeof row.val1 === 'string' ? "font-serif tracking-widest" : "text-gold"
+                        )}>
+                          {typeof row.val1 === 'string' ? (
+                            <>
+                              <span className={getBaziColorClass(row.val1[0])}>{row.val1[0]}</span>
+                              <span className={getBaziColorClass(row.val1[1])}>{row.val1[1]}</span>
+                            </>
+                          ) : row.val1}
+                        </span>
+                      </div>
+                      <div className="p-3 text-center">
+                        <span className={cn(
+                          "text-sm sm:text-lg font-black",
+                          typeof row.val2 === 'string' ? "font-serif tracking-widest" : "text-gold"
+                        )}>
+                          {typeof row.val2 === 'string' ? (
+                            <>
+                              <span className={getBaziColorClass(row.val2[0])}>{row.val2[0]}</span>
+                              <span className={getBaziColorClass(row.val2[1])}>{row.val2[1]}</span>
+                            </>
+                          ) : row.val2}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div className="p-3 bg-zinc-800/30 rounded-xl border border-zinc-700/30 text-[10px] sm:text-xs text-white font-bold text-center uppercase tracking-widest">
+          {currentYear}年 双合盘同步分析 v1.0
+        </div>
+      </div>
+    </div>
+
+  );
+}
+
 // --- Main App ---
 export default function App() {
-  const [view, setView] = useState<'list' | 'form' | 'analyze'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'shuanghepan'>('list');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
+  const [shuanghePair, setShuanghePair] = useState<{ p1: SavedClient | null, p2: SavedClient | null }>({ p1: null, p2: null });
+  const [pickingFor, setPickingFor] = useState<'p1' | 'p2' | null>(null);
 
   const [birthDate, setBirthDate] = useState('1990-05-20');
   const [birthTime, setBirthTime] = useState('10:30');
@@ -197,6 +567,8 @@ export default function App() {
   const [gender, setGender] = useState(1); // 1 for Male, 0 for Female
   const [selectedDaYunIndex, setSelectedDaYunIndex] = useState(1);
   const [selectedNianYear, setSelectedNianYear] = useState(new Date().getFullYear());
+  const [selectedYueIndex, setSelectedYueIndex] = useState(new Date().getMonth());
+  const [selectedRiIndex, setSelectedRiIndex] = useState(new Date().getDate() - 1);
 
   // Client info state
   const [clientName, setClientName] = useState('');
@@ -206,10 +578,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'bazi' | 'numerology' | 'western' | 'houses'>('bazi');
   const [savedClients, setSavedClients] = useState<SavedClient[]>([]);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [mainUserId, setMainUserId] = useState<string | null>(null);
+  const [currentAnalysisClientId, setCurrentAnalysisClientId] = useState<string | null>(null);
+  const [showMainUserPicker, setShowMainUserPicker] = useState(false);
 
   // Load clients from LocalStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('archan_wang_clients');
+    const mainId = localStorage.getItem('archan_wang_main_user_id');
     if (saved) {
       try {
         setSavedClients(JSON.parse(saved));
@@ -217,11 +593,18 @@ export default function App() {
         console.error("Error parsing clients", e);
       }
     }
+    if (mainId) setMainUserId(mainId);
   }, []);
 
   const saveToLocalStorage = (updatedClients: SavedClient[]) => {
     localStorage.setItem('archan_wang_clients', JSON.stringify(updatedClients));
     setSavedClients(updatedClients);
+  };
+
+  const setAsMainUser = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setMainUserId(id);
+    localStorage.setItem('archan_wang_main_user_id', id);
   };
 
   const handleSaveAndAnalyze = async () => {
@@ -287,6 +670,7 @@ export default function App() {
     setLongitude(client.longitude || 101.6869);
     setGender(client.gender === 'male' ? 1 : 0);
     setEditingClientId(null);
+    setCurrentAnalysisClientId(client.id);
     setView('analyze');
   };
 
@@ -488,26 +872,341 @@ export default function App() {
   const liuNianList = currentDaYun.getLiuNian();
   const currentLiuNian = liuNianList.find((ln: LiuNian) => ln.getYear() === selectedNianYear) || liuNianList[0];
   const liuYueList = currentLiuNian.getLiuYue();
+  const currentLiuYue = liuYueList[selectedYueIndex] || liuYueList[0];
+  
+  // Calculate LiuRi (Days) correctly using Bazi sectional month boundaries (solar terms)
+  const liuRiList = useMemo(() => {
+    try {
+      const year = currentLiuNian.getYear();
+      const sectionalNames = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+      
+      const findTerm = (y: number, name: string) => {
+        const monthMap: Record<string, number> = { '立春': 2, '惊蛰': 3, '清明': 4, '立夏': 5, '芒种': 6, '小暑': 7, '立秋': 8, '白露': 9, '寒露': 10, '立冬': 11, '大雪': 12, '小寒': 1 };
+        const m = monthMap[name];
+        if (!m) return null;
+        // Sectional terms usually fall between 4-8. Search a bit around.
+        for (let d = 1; d <= 15; d++) {
+          const s = Solar.fromYmd(y, m, d);
+          if (s.getLunar().getJieQi() === name) return s;
+        }
+        return null;
+      };
+
+      const startTerm = sectionalNames[selectedYueIndex];
+      const endTerm = (selectedYueIndex === 11) ? '立春' : sectionalNames[selectedYueIndex + 1];
+      const endYear = (selectedYueIndex === 11) ? year + 1 : year;
+
+      let startSolar = findTerm(year, startTerm);
+      let endSolar = findTerm(endYear, endTerm);
+
+      // Fallbacks if terms not found (extremely rare)
+      if (!startSolar) startSolar = Solar.fromYmd(year, (selectedYueIndex + 1) % 12 + 1, 4);
+      if (!endSolar) endSolar = Solar.fromYmd(endYear, (selectedYueIndex + 2) % 12 + 1, 4);
+
+      const list = [];
+      let curr = startSolar;
+      const limit = 35; // A Bazi month is roughly 30 days
+      let count = 0;
+      
+      while (curr.getJulianDay() < endSolar.getJulianDay() && count < limit) {
+        const l = curr.getLunar();
+        list.push({
+          getDay: () => curr.getDay(),
+          getGanZhi: () => l.getEightChar().getDay(),
+          getLunarDay: () => l.getDayInChinese() // This returns "初一", "初二" etc. correctly
+        });
+        curr = curr.next(1);
+        count++;
+      }
+      return list;
+    } catch (e) {
+      console.error("LiuRi Calculation Error:", e);
+      return [{ getDay: () => 1, getGanZhi: () => "甲子", getLunarDay: () => "初一" }];
+    }
+  }, [currentLiuNian, selectedYueIndex]);
+
+  const currentLiuRi = liuRiList[selectedRiIndex] || liuRiList[0];
 
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 pt-8 pb-20 px-4 sm:p-8">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 pb-20 px-4 sm:px-8">
       <div className="max-w-[800px] mx-auto flex flex-col gap-4">
         
+        {/* SIDEBAR NAVIGATION */}
+        <AnimatePresence>
+          {isSideMenuOpen && (
+            <>
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsSideMenuOpen(false)}
+                className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100]"
+              />
+              <motion.div 
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed top-0 left-0 bottom-0 w-[280px] bg-zinc-950 border-r border-zinc-900 z-[101] shadow-2xl p-6 flex flex-col gap-8"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <h1 className="text-lg font-black text-white tracking-widest uppercase leading-none">阿赞旺命理</h1>
+                    <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase">ACW Destiny System</span>
+                  </div>
+                  <button onClick={() => setIsSideMenuOpen(false)} className="p-2 hover:bg-zinc-900 rounded-lg text-zinc-500 transition-colors">
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <nav className="flex flex-col gap-2">
+                  <button 
+                    onClick={() => {
+                      setView('list');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 p-4 rounded-2xl transition-all font-bold text-sm",
+                      view === 'list' ? "bg-gold text-zinc-950 shadow-lg shadow-gold/10" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <Home className="w-5 h-5" />
+                    档案列表 (Dashboard)
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      setView('shuanghepan');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 p-4 rounded-2xl transition-all font-bold text-sm",
+                      view === 'shuanghepan' ? "bg-gold text-zinc-950 shadow-lg shadow-gold/10" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <HeartPulse className="w-5 h-5" />
+                    双合盘 (Relationship)
+                  </button>
+                </nav>
+
+                <div className="mt-auto pt-6 border-t border-zinc-900">
+                  <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.2em] mb-4 pl-4 text-center">Destiny Analysis Engine v1.0</p>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         {/* VIEW 1: CLIENT LIST (FRONT PAGE) */}
         {view === 'list' && (
-          <div className="flex flex-col gap-4">
-            <header className="flex items-center justify-between bg-zinc-900 border border-zinc-800 p-4 rounded-xl shadow-2xl">
+          <div className="flex flex-col gap-4 relative">
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gold/10 flex items-center justify-center border border-gold/30">
-                  <Zap className="w-7 h-7 text-gold" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold tracking-tight text-white">阿赞旺命理</h1>
-                  <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest">Archan Wang Destiny System</p>
+                <button 
+                  onClick={() => setIsSideMenuOpen(true)}
+                  className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="flex flex-col">
+                  <h1 className="text-lg font-black text-white tracking-widest uppercase leading-none">阿赞旺命理</h1>
+                  <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase">ACW Destiny System</span>
                 </div>
               </div>
             </header>
+
+            {/* MAIN USER DASHBOARD */}
+            {(() => {
+              const mainUser = savedClients.find(c => c.id === mainUserId);
+              if (!mainUser) {
+                return (
+                  <div className="flex flex-col items-center">
+                    <div className="w-full max-w-[320px] bg-zinc-900/40 border border-zinc-800 border-dashed p-4 rounded-xl flex flex-col items-center justify-center gap-2 text-center">
+                      <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-600">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <p className="text-xs font-bold text-zinc-400">尚未设置个人主页</p>
+                      
+                      <button 
+                        onClick={() => setShowMainUserPicker(true)}
+                        className="px-4 py-2 bg-gold/10 hover:bg-gold text-gold hover:text-zinc-950 rounded-lg text-xs font-black uppercase tracking-widest transition-all mt-1 w-full"
+                      >
+                        从已有档案选择
+                      </button>
+                    </div>
+
+                    {/* PIKER MODAL */}
+                    {showMainUserPicker && (
+                      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                        <div className="bg-zinc-900 border border-zinc-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+                          <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                            <h3 className="font-bold text-white">选择个人档案</h3>
+                            <button onClick={() => setShowMainUserPicker(false)} className="p-1 hover:bg-zinc-800 rounded-lg">
+                              <ChevronLeft className="w-5 h-5 text-zinc-500" />
+                            </button>
+                          </div>
+                          <div className="max-h-[60vh] overflow-y-auto p-2 flex flex-col gap-1">
+                            {savedClients.length === 0 ? (
+                              <div className="p-8 text-center text-zinc-500 text-sm italic">暂无档案，请先添加。</div>
+                            ) : (
+                              savedClients.map(client => (
+                                <button
+                                  key={client.id}
+                                  onClick={() => {
+                                    setAsMainUser(client.id);
+                                    setShowMainUserPicker(false);
+                                  }}
+                                  className="flex items-center gap-3 p-3 hover:bg-zinc-800 rounded-xl transition-colors text-left group"
+                                >
+                                  <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-600 group-hover:text-gold transition-colors">
+                                    <User className="w-5 h-5" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-white">{client.name}</span>
+                                    <span className="text-[10px] text-zinc-500">{client.birthDate}</span>
+                                  </div>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // Calculate Bazi for Main User
+              const [y, m, d] = mainUser.birthDate.split('-').map(Number);
+              const [hh, mm] = mainUser.birthTime.split(':').map(Number);
+              const mSolar = Solar.fromYmdHms(y, m, d, hh, mm, 0);
+              const mLunar = mSolar.getLunar();
+              const mEightChar = mLunar.getEightChar();
+              const mBazi = [mEightChar.getYear(), mEightChar.getMonth(), mEightChar.getDay(), mEightChar.getTime()];
+
+              // Current Bazi
+              const nowSolar = Solar.fromDate(new Date());
+              const nowLunar = nowSolar.getLunar();
+              const nowEightChar = nowLunar.getEightChar();
+              const currentBazi = [nowEightChar.getYear(), nowEightChar.getMonth(), nowEightChar.getDay()];
+
+              // Numerology Calculation for Main User
+              const yRoot = getRootDigit(y);
+              const mRoot = getRootDigit(m);
+              const dRoot = getRootDigit(d);
+              const coreNumber = getRootDigit(yRoot + mRoot + dRoot);
+              
+              const currentYear = new Date().getFullYear();
+              const currentMonth = new Date().getMonth() + 1;
+              const currentDay = new Date().getDate();
+
+              const numYear = getRootDigit(coreNumber + getRootDigit(currentYear));
+              const numMonth = getRootDigit(coreNumber + getRootDigit(currentYear) + getRootDigit(currentMonth));
+              const numDay = getRootDigit(coreNumber + getRootDigit(currentYear) + getRootDigit(currentMonth) + getRootDigit(currentDay));
+
+              return (
+                <div className="flex flex-col items-center">
+                  <div className="w-full max-w-[340px] bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 p-3 rounded-2xl shadow-xl flex flex-col gap-3 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-2 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
+                    <Sparkles className="w-16 h-16 text-gold" />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center border border-gold/20">
+                        <User className="w-5 h-5 text-gold" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                           <h2 className="text-sm font-bold text-white tracking-tight">{mainUser.name}</h2>
+                           <Crown className="w-3 h-3 text-gold" />
+                        </div>
+                        <p className="text-[10px] font-medium text-zinc-500">{mainUser.birthDate}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => setMainUserId(null)} 
+                        className="p-1.5 text-zinc-600 hover:text-zinc-400 transition-colors"
+                        title="取消设置"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          loadClient(mainUser);
+                        }}
+                        className="px-3 py-1.5 bg-gold/10 hover:bg-gold text-gold hover:text-zinc-950 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        分析档案
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Bazi Preview - Super Compact */}
+                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-2 rounded-xl flex flex-col gap-1.5">
+                       <span className="text-[9px] font-black text-white uppercase tracking-tighter flex items-center gap-1">
+                         <LayoutGrid className="w-2.5 h-2.5" /> 本命
+                       </span>
+                       <div className="flex justify-between items-center px-1">
+                         {mBazi.map((pair, i) => (
+                           <div key={i} className="flex flex-col items-center leading-none">
+                             <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
+                             <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+
+                    {/* Current Energy - Super Compact */}
+                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-2 rounded-xl flex flex-col gap-1.5">
+                       <span className="text-[9px] font-black text-white uppercase tracking-tighter flex items-center gap-1">
+                         <Zap className="w-2.5 h-2.5" /> 流日
+                       </span>
+                       <div className="flex justify-between items-center px-0.5">
+                         {currentBazi.map((pair, i) => (
+                           <div key={i} className="flex flex-col items-center">
+                             <div className="flex flex-col items-center leading-none">
+                               <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
+                               <span className={cn("text-xs font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+
+                    {/* Numerology Daily - Super Compact */}
+                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-2 rounded-xl flex flex-col gap-1.5">
+                       <span className="text-[9px] font-black text-white uppercase tracking-tighter flex items-center gap-1">
+                         <Hash className="w-2.5 h-2.5" /> 数字
+                       </span>
+                       <div className="flex justify-between items-center px-1">
+                         <div className="flex flex-col items-center">
+                           <span className="text-sm font-black text-white leading-none">{coreNumber}</span>
+                           <span className="text-[8px] text-white font-bold mt-1">核心</span>
+                         </div>
+                         <div className="flex flex-col items-center">
+                           <span className="text-sm font-black text-gold leading-none">{numYear}</span>
+                           <span className="text-[8px] text-white font-bold mt-1">流年</span>
+                         </div>
+                         <div className="flex flex-col items-center">
+                           <span className="text-sm font-black text-white leading-none">{numMonth}</span>
+                           <span className="text-[8px] text-white font-bold mt-1">流月</span>
+                         </div>
+                         <div className="flex flex-col items-center">
+                           <span className="text-sm font-black text-white leading-none">{numDay}</span>
+                           <span className="text-[8px] text-white font-bold mt-1">流日</span>
+                         </div>
+                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
@@ -708,9 +1407,12 @@ export default function App() {
         {/* VIEW 3: ANALYSIS VIEW (THE BAZI GRID) */}
         {view === 'analyze' && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between py-1 px-1">
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
               <button 
-                onClick={() => setView('list')}
+                onClick={() => {
+                  setCurrentAnalysisClientId(null);
+                  setView('list');
+                }}
                 className="flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-white transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -720,8 +1422,20 @@ export default function App() {
                 <User className="w-3.5 h-3.5 text-gold" />
                 <span className="text-xs font-black">{clientName}</span>
                 <span className="text-xs text-zinc-500 font-bold">({gender === 1 ? '男' : '女'})</span>
+                {currentAnalysisClientId && (
+                  <button 
+                    onClick={() => setAsMainUser(currentAnalysisClientId)}
+                    className={cn(
+                      "ml-2 p-1 rounded-md transition-all",
+                      mainUserId === currentAnalysisClientId ? "text-gold" : "text-zinc-600 hover:text-gold"
+                    )}
+                    title="设为本人 (Set as Main User)"
+                  >
+                    <Crown className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-            </div>
+            </header>
 
             {/* Summary Information Table */}
             <div className="grid grid-cols-2 gap-2 bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl shadow-lg">
@@ -789,216 +1503,361 @@ export default function App() {
 
             {activeTab === 'bazi' ? (
               <div className="flex flex-col gap-4">
-                {/* The Main Bazi Grid - Matching Image Layout */}
+                {/* 1. ORIGINAL BAZI CHART (Standard Natal) */}
                 <div className="flex flex-col bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden shadow-2xl">
-          {/* Row 1: Headers */}
-          <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700">日期</div>
-            {["时柱", "日柱", "月柱", "年柱", "大运", "流年"].map((label, idx) => (
-              <div key={idx} className="flex-1 flex items-center justify-center text-xs font-bold border-r border-zinc-700 last:border-r-0">{label}</div>
-            ))}
-          </div>
+                  {/* Row 1: Headers */}
+                  <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
+                    <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700 text-zinc-400">日期</div>
+                    {["时柱", "日柱", "月柱", "年柱", "大运", "流年"].map((label, idx) => (
+                      <div key={idx} className="flex-1 flex items-center justify-center text-xs font-bold border-r border-zinc-700 last:border-r-0">{label}</div>
+                    ))}
+                  </div>
 
-          {/* Row 2: Age/Year */}
-          <div className="flex bg-zinc-800/40 border-b border-zinc-700 h-12 sm:h-14">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700 leading-tight">歳<br />年</div>
-            <div className="flex-[4] flex items-center justify-center text-blue-500 text-xs font-black italic border-r border-zinc-700 text-center px-1">
-            </div>
-            <div className="flex-1 flex items-center justify-center border-r border-zinc-700 text-center leading-tight">
-              <div className="text-[11px] font-bold text-white">{currentDaYun.getStartAge()}歳<br />{currentDaYun.getStartYear()}</div>
-            </div>
-            <div className="flex-1 flex items-center justify-center text-center leading-tight">
-              <div className="text-[11px] font-bold text-white">{currentLiuNian.getYear() - solar.getYear() + 1}歳<br />{currentLiuNian.getYear()}</div>
-            </div>
-          </div>
+                  {/* Row 2: Age/Year */}
+                  <div className="flex bg-zinc-800/40 border-b border-zinc-700 h-12 sm:h-14">
+                    <div className="w-12 sm:w-16 flex items-center justify-center text-[10px] font-bold border-r border-zinc-700 leading-tight text-zinc-500">歳<br />年</div>
+                    <div className="flex-[4] flex items-center justify-center border-r border-zinc-700 text-center px-1"></div>
+                    <div className="flex-1 flex items-center justify-center border-r border-zinc-700 text-center leading-tight">
+                      <div className="text-[11px] font-bold text-white">{currentDaYun.getStartAge()}歳<br />{currentDaYun.getStartYear()}</div>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center text-center leading-tight">
+                      <div className="text-[11px] font-bold text-white">{currentLiuNian.getYear() - solar.getYear() + 1}歳<br />{currentLiuNian.getYear()}</div>
+                    </div>
+                  </div>
 
-          {/* Row 3: Stems (天干) */}
-          <div className="flex bg-zinc-950 border-b border-zinc-800">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">天干</div>
-            {[
-              { label: "时", gan: (eightChar as any).getHour ? (eightChar as any).getHour().substring(0,1) : eightChar.getTime().substring(0,1), ss: eightChar.getTimeShiShenGan() },
-              { label: "日", gan: eightChar.getDayGan(), ss: "日主", isDayMaster: true },
-              { label: "月", gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
-              { label: "年", gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
-              { label: "大运", gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
-              { label: "流年", gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
-            ].map((item, idx) => (
-              <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
-                <span className={cn("text-2xl sm:text-4xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
-                <div className="absolute top-1 right-1 flex flex-col items-center">
-                  <span className="text-[11px] font-bold text-zinc-400">{getShiShenShort(item.ss)}</span>
-                  {item.isDayMaster && <span className="text-[10px] sm:text-[11px] font-bold text-gold mt-0.5">{gender === 1 ? "男" : "女"}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Row 4: Branches (地支) */}
-          <div className="flex bg-zinc-900/50 border-b border-zinc-800">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">地支</div>
-            {[
-              { label: "时", zhi: (eightChar as any).getHour ? (eightChar as any).getHour().substring(1,2) : eightChar.getTime().substring(1,2), sss: eightChar.getTimeShiShenZhi() },
-              { label: "日", zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
-              { label: "月", zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
-              { label: "年", zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
-              { label: "大运", zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
-              { label: "流年", zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
-            ].map((item, idx) => (
-              <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
-                <span className={cn("text-2xl sm:text-4xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
-                <div className="absolute top-1 right-1 flex flex-col items-end">
-                  {item.sss.map((s, i) => <span key={i} className="text-[10px] sm:text-[11px] font-bold text-zinc-500 leading-tight">{getShiShenShort(s)}</span>)}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Row 5 & 6: Liu Yue (Month distribution) */}
-          <div className="flex border-b border-zinc-800">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-[11px] font-bold bg-zinc-900 border-r border-zinc-800 px-1 leading-tight">流月干</div>
-            <div className="flex-1 grid grid-cols-12">
-              {liuYueList.map((ly, i) => (
-                <div key={i} className="flex justify-center items-center py-1 border-r border-zinc-800 last:border-r-0 text-xs sm:text-xs">
-                  <span className={getBaziColorClass(ly.getGanZhi()[0])}>{ly.getGanZhi()[0]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex border-b border-zinc-800">
-            <div className="w-12 sm:w-16 flex items-center justify-center text-[11px] font-bold bg-zinc-900 border-r border-zinc-800 px-1 leading-tight">流月支</div>
-            <div className="flex-1 grid grid-cols-12">
-              {liuYueList.map((ly, i) => (
-                <div key={i} className="flex justify-center items-center py-1 border-r border-zinc-800 last:border-r-0 text-xs sm:text-xs">
-                  <span className={getBaziColorClass(ly.getGanZhi()[1])}>{ly.getGanZhi()[1]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Extra Rows: 星运, 自坐, 空亡 */}
-          {[
-            { label: "星运", items: [eightChar.getTimeDiShi(), eightChar.getDayDiShi(), eightChar.getMonthDiShi(), eightChar.getYearDiShi(), "胎", "死"] },
-            { label: "自坐", items: [eightChar.getTimeNaYin(), eightChar.getDayNaYin(), eightChar.getMonthNaYin(), eightChar.getYearNaYin(), "海中金", "剑锋金"] },
-            { label: "空亡", items: [eightChar.getTimeXunKong(), eightChar.getDayXunKong(), eightChar.getMonthXunKong(), eightChar.getYearXunKong(), "申酉", "寅卯"] },
-          ].map((row, rowIdx) => (
-            <div key={rowIdx} className={cn("flex border-b border-zinc-800 bg-zinc-900/30", rowIdx === 2 && "border-b-0")}>
-              <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">{row.label}</div>
-              {row.items.map((val, colIdx) => (
-                <div key={colIdx} className="flex-1 flex items-center justify-center py-1 sm:py-2 px-1 text-[10px] sm:text-[11px] text-zinc-400 border-r border-zinc-800 last:border-r-0 text-center">
-                  {val}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        {/* Secondary Info Bar */}
-        <div className="bg-zinc-800 px-3 py-1.5 rounded text-[10px] sm:text-xs flex items-center justify-between font-medium">
-          <div>出生后{yun.getStartYear()}年{yun.getStartMonth()}月开始行大运, 每交大运年{yun.getStartMonth()}月起运(西曆)</div>
-        </div>
-
-        {/* Super compact Selection Grid for Mobile Viewability */}
-        <div className="flex flex-col bg-zinc-900 border border-zinc-800 rounded shadow-lg overflow-hidden">
-          
-          {/* Section 1: Da Yun Selector */}
-          <div className="flex flex-col p-1.5">
-             <div className="flex items-center gap-1.5 mb-1 px-0.5">
-                <span className="text-xs text-zinc-100 font-bold">大運</span>
-                <span className="text-[9px] text-zinc-500 font-bold">起運: {yun.getStartYear()}年{yun.getStartMonth()}月</span>
-             </div>
-             
-             <div className="grid grid-cols-6 sm:grid-cols-12 gap-1">
-                {/* Period before cycle (Small Luck) */}
-                <div className="flex flex-col rounded border border-zinc-800 bg-zinc-950/30 overflow-hidden">
-                   <div className="bg-zinc-800/80 text-[10px] font-bold text-white text-center py-1 border-b border-zinc-800 leading-tight">
-                      1-{(daYunList[1]?.getStartAge() || 10) - 1}
-                   </div>
-                   <div className="flex-1 flex flex-col items-center justify-center p-0.5 leading-none">
-                      <div className="text-[10px] font-serif font-bold text-zinc-500">小</div>
-                      <div className="text-[10px] font-serif font-bold text-zinc-500">運</div>
-                   </div>
-                </div>
-
-                {/* Da Yun Pillars */}
-                {daYunList.slice(1).map((dy, idx) => {
-                  const isActive = selectedDaYunIndex === idx + 1;
-                  const gan = dy.getGanZhi().substring(0,1);
-                  const zhi = dy.getGanZhi().substring(1,2);
-                  return (
-                    <button 
-                      key={idx}
-                      onClick={() => setSelectedDaYunIndex(idx + 1)}
-                      className={cn(
-                        "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
-                        isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800"
-                      )}
-                    >
-                      <div className={cn("text-[10px] font-bold text-center py-1 border-b leading-tight transition-colors", isActive ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800")}>
-                        {dy.getStartAge()}歳<br />{dy.getStartYear()}
-                      </div>
-                      <div className="flex flex-col items-center py-0.5 leading-none gap-0">
-                        <div className="flex items-center gap-0.5">
-                          <span className={cn("text-base font-serif font-bold", getBaziColorClass(gan))}>{gan}</span>
-                         </div>
-                        <div className="flex items-center gap-0.5">
-                          <span className={cn("text-base font-serif font-bold", getBaziColorClass(zhi))}>{zhi}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 justify-center w-full bg-black/20 mt-0.5 py-px">
-                           <span className="text-[8px] text-gold/80 font-bold leading-none">{getShiShenShort(getShiShenFromGans(data.dayGan, gan))}</span>
-                           <span className="text-[8px] text-amber-600 font-bold leading-none">{getShiShenShort(getShiShenFromZhi(data.dayGan, zhi)[0])}</span>
+                  {/* Row 3: Stems (天干) */}
+                  <div className="flex bg-zinc-950 border-b border-zinc-800">
+                    <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">天干</div>
+                    {[
+                      { label: "时", gan: (eightChar as any).getHour ? (eightChar as any).getHour().substring(0,1) : eightChar.getTime().substring(0,1), ss: eightChar.getTimeShiShenGan() },
+                      { label: "日", gan: eightChar.getDayGan(), ss: "日主", isDayMaster: true },
+                      { label: "月", gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
+                      { label: "年", gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
+                      { gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
+                      { gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
+                        <span className={cn("text-2xl sm:text-4xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
+                        <div className="absolute top-1 right-1 flex flex-col items-center">
+                          <span className="text-[11px] font-bold text-zinc-400">{getShiShenShort(item.ss)}</span>
+                          {item.isDayMaster && <span className="text-[10px] sm:text-[11px] font-bold text-gold mt-0.5">{gender === 1 ? "男" : "女"}</span>}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
-             </div>
-          </div>
+                    ))}
+                  </div>
 
-          <div className="h-px bg-zinc-800/30 w-full" />
-
-          {/* Section 2: Liu Nian Selector */}
-          <div className="flex flex-col p-1.5">
-             <div className="flex items-center gap-1.5 mb-1 px-0.5">
-                <span className="text-xs text-zinc-100 font-bold">流年</span>
-             </div>
-
-             <div className="grid grid-cols-5 sm:grid-cols-10 gap-1">
-                {liuNianList.map((ln, idx) => {
-                  const isActive = selectedNianYear === ln.getYear();
-                  const gan = ln.getGanZhi().substring(0,1);
-                  const zhi = ln.getGanZhi().substring(1,2);
-                  return (
-                    <button 
-                      key={idx}
-                      onClick={() => setSelectedNianYear(ln.getYear())}
-                      className={cn(
-                        "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
-                        isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800"
-                      )}
-                    >
-                      <div className={cn("text-[10px] font-bold text-center py-1 border-b leading-none transition-colors", isActive ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800")}>
-                        {ln.getYear()}
-                      </div>
-                      <div className="flex flex-col items-center py-0.5 leading-none gap-0">
-                        <div className="flex items-center gap-0.5">
-                          <span className={cn("text-base font-serif font-bold", getBaziColorClass(gan))}>{gan}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5">
-                          <span className={cn("text-base font-serif font-bold", getBaziColorClass(zhi))}>{zhi}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 justify-center w-full bg-black/20 mt-0.5 py-px">
-                           <span className="text-[8px] text-gold/80 font-bold">{getShiShenShort(getShiShenFromGans(data.dayGan, gan))}</span>
-                           <span className="text-[8px] text-amber-600 font-bold">{getShiShenShort(getShiShenFromZhi(data.dayGan, zhi)[0])}</span>
+                  {/* Row 4: Branches (地支) */}
+                  <div className="flex bg-zinc-900/50 border-b border-zinc-800">
+                    <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">地支</div>
+                    {[
+                      { label: "时", zhi: (eightChar as any).getHour ? (eightChar as any).getHour().substring(1,2) : eightChar.getTime().substring(1,2), sss: eightChar.getTimeShiShenZhi() },
+                      { label: "日", zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
+                      { label: "月", zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
+                      { label: "年", zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
+                      { zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
+                      { zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
+                    ].map((item, idx) => (
+                      <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
+                        <span className={cn("text-2xl sm:text-4xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
+                        <div className="absolute top-1 right-1 flex flex-col items-end">
+                          {item.sss.map((s, i) => <span key={i} className="text-[10px] sm:text-[11px] font-bold text-zinc-500 leading-tight">{getShiShenShort(s)}</span>)}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
-             </div>
-          </div>
-        </div>
-              </div>
+                    ))}
+                  </div>
+
+                  {/* Row: 藏干 (Hidden Stems) */}
+                  <div className="flex bg-zinc-950/20 border-b border-zinc-800">
+                    <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">藏干</div>
+                    {[
+                      { zhi: (eightChar as any).getHour ? (eightChar as any).getHour().substring(1,2) : eightChar.getTime().substring(1,2) },
+                      { zhi: eightChar.getDayZhi() },
+                      { zhi: eightChar.getMonthZhi() },
+                      { zhi: eightChar.getYearZhi() },
+                      { zhi: currentDaYun.getGanZhi().substring(1,2) },
+                      { zhi: currentLiuNian.getGanZhi().substring(1,2) },
+                    ].map((item, idx) => {
+                      const hides = idx < 4 ? (ZHI_HIDE_GAN[item.zhi] || []) : [];
+                      return (
+                        <div key={idx} className="flex-1 flex flex-col items-center justify-center py-2 sm:py-3 border-r border-zinc-800 last:border-r-0 leading-tight">
+                          {hides.map((h, i) => {
+                            const ss = SHI_SHEN_MAP[data.dayGan + h] || '';
+                            return (
+                              <div key={i} className="flex items-center gap-0.5 text-[10px] sm:text-[11px] font-bold">
+                                <span className={getBaziColorClass(h)}>{h}</span>
+                                <span className="text-zinc-500">({ss})</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Extra Rows: 星运, 自坐, 空亡 */}
+                  {[
+                    { label: "星运", items: [eightChar.getTimeDiShi(), eightChar.getDayDiShi(), eightChar.getMonthDiShi(), eightChar.getYearDiShi(), "胎", "死"] },
+                    { label: "自坐", items: [eightChar.getTimeNaYin(), eightChar.getDayNaYin(), eightChar.getMonthNaYin(), eightChar.getYearNaYin(), "海中金", "剑锋金"] },
+                    { label: "空亡", items: [eightChar.getTimeXunKong(), eightChar.getDayXunKong(), eightChar.getMonthXunKong(), eightChar.getYearXunKong(), "申酉", "寅卯"] },
+                  ].map((row, rowIdx) => (
+                    <div key={rowIdx} className={cn("flex border-b border-zinc-800 bg-zinc-900/30", rowIdx === 2 && "border-b-0")}>
+                      <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">{row.label}</div>
+                      {row.items.map((val, colIdx) => {
+                        if (colIdx >= 6) return null;
+                        return (
+                          <div key={colIdx} className="flex-1 flex items-center justify-center py-1 sm:py-2 px-1 text-[10px] sm:text-[11px] text-zinc-400 border-r border-zinc-800 last:border-r-0 text-center">
+                            {val}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Secondary Info Bar */}
+                <div className="bg-zinc-800 px-3 py-1.5 rounded text-[10px] sm:text-xs flex items-center justify-between font-medium">
+                  <div>出生后{yun.getStartYear()}年{yun.getStartMonth()}月开始行大运, 每交大运年{yun.getStartMonth()}月起运(西曆)</div>
+                </div>
+
+                {/* SELECTOR GRID (Da Yun & Liu Nian) */}
+                <div className="flex flex-col bg-zinc-900 border border-zinc-800 rounded shadow-lg overflow-hidden mb-4">
+                  
+                  {/* Section 1: Da Yun Selector */}
+                  <div className="flex flex-col p-1.5">
+                    <div className="flex items-center gap-1.5 mb-1 px-0.5">
+                        <span className="text-xs text-zinc-100 font-bold uppercase tracking-wider">大運</span>
+                        <span className="text-[9px] text-zinc-500 font-bold">起運: {yun.getStartYear()}年{yun.getStartMonth()}月</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 px-0.5">
+                        <div className="flex flex-col rounded border border-zinc-800 bg-zinc-950/30 overflow-hidden">
+                          <div className="bg-zinc-800/80 text-[10px] font-bold text-white text-center py-1 border-b border-zinc-800 leading-tight">
+                              1-{(daYunList[1]?.getStartAge() || 10) - 1}
+                          </div>
+                          <div className="flex-1 flex flex-col items-center justify-center p-0.5 leading-none">
+                              <div className="text-[10px] font-serif font-bold text-zinc-500">小</div>
+                              <div className="text-[10px] font-serif font-bold text-zinc-500">運</div>
+                          </div>
+                        </div>
+
+                        {daYunList.slice(1).map((dy, idx) => {
+                          const isActive = selectedDaYunIndex === idx + 1;
+                          const gan = dy.getGanZhi().substring(0,1);
+                          const zhi = dy.getGanZhi().substring(1,2);
+                          return (
+                            <button 
+                              key={idx}
+                              id={`dayun-btn-${idx}`}
+                              onClick={() => setSelectedDaYunIndex(idx + 1)}
+                              className={cn(
+                                "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
+                                isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800"
+                              )}
+                            >
+                              <div className={cn("text-[8px] sm:text-[10px] font-bold text-center py-1 border-b leading-tight transition-colors", isActive ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800")}>
+                                {dy.getStartAge()}<br className="sm:hidden" />歳
+                              </div>
+                              <div className="flex flex-col items-center py-0.5 leading-none gap-0">
+                                <span className={cn("text-base font-serif font-bold", getBaziColorClass(gan))}>{gan}</span>
+                                <span className={cn("text-base font-serif font-bold", getBaziColorClass(zhi))}>{zhi}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-zinc-800/30 w-full" />
+
+                  {/* Section 2: Liu Nian Selector */}
+                  <div className="flex flex-col p-1.5">
+                    <div className="flex items-center gap-1.5 mb-1 px-0.5">
+                        <span className="text-xs text-zinc-100 font-bold uppercase tracking-wider">流年</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 px-0.5">
+                        {liuNianList.map((ln, idx) => {
+                          const isActive = selectedNianYear === ln.getYear();
+                          const gan = ln.getGanZhi().substring(0,1);
+                          const zhi = ln.getGanZhi().substring(1,2);
+                          return (
+                            <button 
+                              key={idx}
+                              id={`liunian-btn-${idx}`}
+                              onClick={() => {
+                                setSelectedNianYear(ln.getYear());
+                                setSelectedYueIndex(0);
+                                setSelectedRiIndex(0);
+                              }}
+                              className={cn(
+                                "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
+                                isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800"
+                              )}
+                            >
+                              <div className={cn("text-[10px] font-bold text-center py-1 border-b leading-none transition-colors", isActive ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800")}>
+                                {ln.getYear()}
+                              </div>
+                              <div className="flex flex-col items-center py-0.5 leading-none gap-0">
+                                <span className={cn("text-lg font-serif font-bold", getBaziColorClass(gan))}>{gan}</span>
+                                <span className={cn("text-lg font-serif font-bold", getBaziColorClass(zhi))}>{zhi}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. CONSOLIDATED CHART & SELECTOR (The Request: Stick together, unify scrolling) */}
+                <div className="flex flex-col bg-zinc-900 border border-zinc-800 rounded shadow-lg overflow-hidden mb-6">
+                  
+                  {/* CHART PART */}
+                  <div className="flex flex-col">
+                    {/* Row 1: Headers */}
+                    <div className="flex bg-zinc-800 border-b border-zinc-700 h-8 sm:h-10">
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-black border-r border-zinc-700 text-zinc-400 uppercase">日期</div>
+                      {["流日", "流月", "流年", "大运", "年柱", "月柱", "日柱", "时柱"].map((label, idx) => (
+                        <div key={idx} className="flex-1 flex items-center justify-center text-[9px] font-black border-r border-zinc-700 last:border-r-0 text-zinc-300 uppercase">{label}</div>
+                      ))}
+                    </div>
+
+                    {/* Row 2: Age/Year */}
+                    <div className="flex bg-zinc-950 border-b border-zinc-800 h-10 sm:h-12">
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-bold border-r border-zinc-800 leading-tight whitespace-pre-wrap text-zinc-500 uppercase">岁\n年</div>
+                      {[
+                        { val: `${(currentLiuRi as any).getLunarDay ? (currentLiuRi as any).getLunarDay() : ''}\n${currentLiuRi.getDay()}日` },
+                        { val: `${currentLiuYue.getIndex() + 1}月` },
+                        { val: `${currentLiuNian.getYear() - solar.getYear() + 1}岁\n${currentLiuNian.getYear()}年` },
+                        { val: `${Math.floor(currentDaYun.getStartAge())}岁\n${currentDaYun.getStartYear()}年` },
+                        { val: "*" }, { val: "*" }, { val: "*" }, { val: "*" },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex-1 flex items-center justify-center border-r border-zinc-800 text-center leading-tight last:border-r-0">
+                          <div className="text-[9px] font-bold text-white whitespace-pre-wrap">{(item as any).val}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Row 3: Stems */}
+                    <div className="flex bg-zinc-950 border-b border-zinc-900">
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-bold bg-zinc-900 border-r border-zinc-800 uppercase">天干</div>
+                      {[
+                        { gan: currentLiuRi.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuRi.getGanZhi().substring(0,1)) },
+                        { gan: currentLiuYue.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuYue.getGanZhi().substring(0,1)) },
+                        { gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
+                        { gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
+                        { gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
+                        { gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
+                        { gan: eightChar.getDayGan(), ss: "元男" },
+                        { gan: (eightChar as any).getHour ? (eightChar as any).getHour().substring(0,1) : eightChar.getTime().substring(0,1), ss: eightChar.getTimeShiShenGan() },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex-1 flex items-center justify-center relative py-2.5 border-r border-zinc-800 last:border-r-0">
+                          <span className={cn("text-lg sm:text-xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
+                          <div className="absolute top-0.5 right-0.5 flex flex-col items-center">
+                            <span className="text-[7px] sm:text-[8px] font-bold text-zinc-400 leading-none">{getShiShenShort(item.ss)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Row 4: Branches */}
+                    <div className="flex bg-zinc-900/50 border-b border-zinc-800">
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[9px] font-bold bg-zinc-900 border-r border-zinc-800 uppercase">地支</div>
+                      {[
+                        { zhi: currentLiuRi.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuRi.getGanZhi().substring(1,2)) },
+                        { zhi: currentLiuYue.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuYue.getGanZhi().substring(1,2)) },
+                        { zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
+                        { zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
+                        { zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
+                        { zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
+                        { zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
+                        { zhi: (eightChar as any).getHour ? (eightChar as any).getHour().substring(1,2) : eightChar.getTime().substring(1,2), sss: eightChar.getTimeShiShenZhi() },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex-1 flex items-center justify-center relative py-2.5 border-r border-zinc-800 last:border-r-0">
+                          <span className={cn("text-lg sm:text-xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
+                          <div className="absolute top-0.5 right-0.5 flex flex-col items-end">
+                            {item.sss.map((s, i) => <span key={i} className="text-[7px] sm:text-[8px] font-bold text-zinc-500 leading-none">{getShiShenShort(s)}</span>)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                  </div>
+
+                  {/* SELECTOR PART (STUCK BELOW) */}
+                  <div className="w-full">
+                    <table className="w-full border-collapse table-fixed">
+                      <tbody>
+                        {/* 流月 Row */}
+                        <tr className="bg-zinc-800/80">
+                          <td className="w-10 shrink-0 p-2 text-[10px] font-black text-white border-r border-zinc-700 text-center bg-zinc-900 uppercase">流月</td>
+                          {['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'].map((term, idx) => {
+                            const isActive = selectedYueIndex === idx;
+                            const ly = liuYueList[idx];
+                            const gan = ly?.getGanZhi().substring(0,1);
+                            const zhi = ly?.getGanZhi().substring(1,2);
+                            return (
+                              <td 
+                                key={idx} 
+                                onClick={() => { setSelectedYueIndex(idx); setSelectedRiIndex(0); }}
+                                className={cn(
+                                  "p-1 border-r border-zinc-800 text-center cursor-pointer transition-colors",
+                                  isActive ? "bg-zinc-600 shadow-inner" : "hover:bg-zinc-800/20"
+                                )}
+                              >
+                                <div className="flex flex-col items-center">
+                                  <span className={cn("text-[8px] sm:text-[9px] font-bold", isActive ? "text-white" : "text-zinc-500")}>
+                                    {term}
+                                  </span>
+                                  <div className="flex flex-col items-center justify-center leading-none mt-0.5">
+                                    <span className={cn("text-sm sm:text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(gan))}>{gan}</span>
+                                    <span className={cn("text-sm sm:text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(zhi))}>{zhi}</span>
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        
+                        {/* 流日 Row - Shared Scroll Container for Date & Pillar */}
+                        <tr className="bg-zinc-950 border-t border-zinc-800">
+                          <td className="w-10 p-2 text-[10px] font-black text-white border-r border-zinc-800 text-center bg-zinc-900 uppercase">流日</td>
+                          <td colSpan={12} className="p-0 border-r border-zinc-800">
+                            {/* Unified Scrollable Container */}
+                            <div className="flex overflow-x-auto custom-scrollbar-grey w-full scrollbar-gutter-stable">
+                                {liuRiList.map((lr, idx) => {
+                                  const isActive = selectedRiIndex === idx;
+                                  const gan = lr.getGanZhi().substring(0,1);
+                                  const zhi = lr.getGanZhi().substring(1,2);
+                                  const lunarDayName = lr.getLunarDay();
+
+                                  return (
+                                    <div 
+                                      key={idx} 
+                                      onClick={() => setSelectedRiIndex(idx)}
+                                      className={cn(
+                                        "min-w-[44px] sm:min-w-[56px] border-r border-zinc-800 cursor-pointer transition-colors shrink-0 flex flex-col items-center py-2",
+                                        isActive ? "bg-zinc-600 shadow-inner" : "hover:bg-zinc-800/30"
+                                      )}
+                                    >
+                                      <span className={cn("text-[9px] font-black mb-1", isActive ? "text-white" : "text-zinc-600")}>{lunarDayName}</span>
+                                      <div className="flex flex-col items-center leading-tight">
+                                        <span className={cn("text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(gan))}>{gan}</span>
+                                        <span className={cn("text-lg font-serif font-black", isActive ? "text-white" : getBaziColorClass(zhi))}>{zhi}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                </div>
             ) : activeTab === 'numerology' ? (
+
               <div className="flex flex-col gap-4">
                 <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
                   <div className="bg-zinc-800 px-4 py-3 border-b border-zinc-700">
@@ -1011,14 +1870,14 @@ export default function App() {
                   <div className="p-4">
                     <div className="grid grid-cols-4 gap-2 mb-6">
                       {[
-                        { label: '年份', value: birthDate.split('-')[0] || '0', color: 'text-blue-400' },
-                        { label: '月份', value: birthDate.split('-')[1] || '0', color: 'text-emerald-400' },
-                        { label: '日期', value: birthDate.split('-')[2] || '0', color: 'text-amber-400' },
+                        { label: '年份', value: birthDate.split('-')[0] || '0', color: 'text-gold' },
+                        { label: '月份', value: birthDate.split('-')[1] || '0', color: 'text-gold' },
+                        { label: '日期', value: birthDate.split('-')[2] || '0', color: 'text-gold' },
                         { label: '核心数', value: '?', color: 'text-gold' }
                       ].map((item, i) => (
                         <div key={i} className="bg-black/40 border border-zinc-800 p-2 rounded-lg flex flex-col items-center">
-                          <span className="text-[10px] text-white font-bold uppercase tracking-tighter mb-1">{item.label}</span>
-                          <span className={cn("text-lg font-black", item.color)}>{item.value === '?' ? getRootDigit(birthDate) : item.value}</span>
+                          <span className="text-[10px] text-gold/80 font-bold uppercase tracking-tighter mb-1">{item.label}</span>
+                          <span className={cn("text-xl font-black", item.color)}>{item.value === '?' ? getRootDigit(birthDate) : item.value}</span>
                         </div>
                       ))}
                     </div>
@@ -1027,9 +1886,9 @@ export default function App() {
                       <table className="w-full border-collapse border border-zinc-800">
                         <thead>
                           <tr className="bg-zinc-800/80">
-                            <th className="p-2 border border-zinc-700 text-[10px] font-black text-zinc-400 sticky left-0 bg-zinc-800 z-10 min-w-16">类别</th>
+                            <th className="p-2 border border-zinc-700 text-[10px] font-black text-gold sticky left-0 bg-zinc-800 z-10 min-w-16">类别</th>
                             {[...Array(12)].map((_, i) => (
-                              <th key={i} className="p-2 border border-zinc-700 text-[10px] font-black text-zinc-400 min-w-10">{i + 1}月</th>
+                              <th key={i} className="p-2 border border-zinc-700 text-[10px] font-black text-gold min-w-10">{i + 1}月</th>
                             ))}
                           </tr>
                         </thead>
@@ -1074,7 +1933,7 @@ export default function App() {
 
                             return matrixRows.map((row, idx) => (
                               <tr key={idx} className="hover:bg-zinc-800/30">
-                                <td className="p-2 border border-zinc-800 text-[10px] font-bold text-zinc-300 sticky left-0 bg-zinc-900/95 z-10">{row.label}</td>
+                                <td className="p-2 border border-zinc-800 text-[10px] font-bold text-gold sticky left-0 bg-zinc-900/95 z-10">{row.label}</td>
                                 {[...Array(12)].map((_, mIdx) => {
                                   const monthNum = mIdx + 1;
                                   const monthlyFlowVal = getRootDigit(coreVal.toString() + currentYear.toString() + monthNum.toString());
@@ -1098,11 +1957,11 @@ export default function App() {
                                     <td key={mIdx} className="p-1 border border-zinc-800 text-center">
                                       <div className={cn(
                                         "inline-flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300",
-                                        isMatched ? "border-2 border-emerald-500 bg-emerald-500/10 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : ""
+                                        isMatched ? "border-2 border-gold/50 bg-gold/10 shadow-[0_0_8px_rgba(255,215,0,0.3)]" : ""
                                       )}>
                                         <span className={cn(
-                                          "text-xs font-black",
-                                          isMatched ? "text-emerald-400" : (row.type === 'month' ? "text-gold" : "text-zinc-500")
+                                          "text-sm font-black",
+                                          isMatched ? "text-gold" : (row.type === 'month' ? "text-gold" : "text-gold/40")
                                         )}>
                                           {val}
                                         </span>
@@ -1120,8 +1979,8 @@ export default function App() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="border-b border-zinc-800">
-                          <th className="py-2 text-left text-[10px] font-black text-zinc-500 uppercase tracking-widest">项目</th>
-                          <th className="py-2 text-right text-[10px] font-black text-zinc-500 uppercase tracking-widest">计算公式</th>
+                          <th className="py-2 text-left text-[10px] font-black text-gold uppercase tracking-widest">项目</th>
+                          <th className="py-2 text-right text-[10px] font-black text-gold uppercase tracking-widest">计算公式</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/50">
@@ -1154,12 +2013,12 @@ export default function App() {
 
                             return calculations.map((row) => (
                               <tr key={row.id} className="hover:bg-zinc-800/30 transition-colors">
-                                <td className="py-3 text-xs font-bold text-zinc-300">
+                                <td className="py-3 text-xs font-bold text-gold">
                                   {row.label}
                                 </td>
                                 <td className="py-3 text-right text-[10px] font-mono text-zinc-500 whitespace-nowrap">
-                                  {row.formula} = <span className="text-gold font-bold text-sm mx-1">{row.root}</span>
-                                  <span className="text-zinc-400 font-black text-[11px]">({PLANET_MAP[row.root]})</span>
+                                  {row.formula} = <span className="text-gold font-black text-lg mx-1">{row.root}</span>
+                                  <span className="text-gold/60 font-black text-[11px]">({PLANET_MAP[row.root]})</span>
                                 </td>
                               </tr>
                             ));
@@ -1684,6 +2543,176 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* VIEW 4: SHUANG HE PAN */}
+      {view === 'shuanghepan' && (
+        <div className="max-w-[800px] mx-auto flex flex-col gap-6">
+          <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsSideMenuOpen(true)}
+                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="flex flex-col">
+                <h1 className="text-lg font-black text-white tracking-widest uppercase leading-none">双合盘</h1>
+                <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase">Relationship Sync</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {(shuanghePair.p1 || shuanghePair.p2) && (
+                <button 
+                  onClick={() => setShuanghePair({ p1: null, p2: null })}
+                  className="px-3 py-1.5 text-[10px] font-black text-zinc-500 hover:text-white uppercase transition-colors"
+                >
+                  重置 (Reset)
+                </button>
+              )}
+              <button 
+                onClick={() => setView('list')}
+                className="p-2 text-zinc-500 hover:text-white transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+
+          <div className="flex flex-col gap-8 items-center pt-6">
+            {shuanghePair.p1 && shuanghePair.p2 ? (
+              <RelationshipCompareView 
+                p1={shuanghePair.p1} 
+                p2={shuanghePair.p2} 
+                onReplaceP1={() => setPickingFor('p1')}
+                onReplaceP2={() => setPickingFor('p2')}
+              />
+            ) : (
+              <div className="flex flex-col md:flex-row gap-8 w-full max-w-2xl mx-auto items-stretch">
+                {/* Slot P1 */}
+                <div className="flex-1 flex flex-col gap-4">
+                  <div className="text-xs sm:text-sm font-black text-white uppercase tracking-widest flex items-center justify-center gap-3 px-2">
+                    <User className="w-5 h-5 text-gold" /> 第一位 (P1)
+                  </div>
+                  {shuanghePair.p1 ? (
+                    <div 
+                      onClick={() => setPickingFor('p1')}
+                      className="bg-zinc-900 border border-gold/50 rounded-3xl p-6 flex items-center gap-4 cursor-pointer hover:bg-zinc-800 transition-colors shadow-lg"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-base border border-gold/30">{shuanghePair.p1.name[0]}</div>
+                      <div className="flex flex-col">
+                         <span className="text-sm sm:text-base font-black text-white uppercase">{shuanghePair.p1.name}</span>
+                         <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">已选择 (Selected)</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setPickingFor('p1')}
+                      className="h-32 bg-zinc-900/40 border-2 border-zinc-800 border-dashed rounded-3xl flex flex-col items-center justify-center gap-3 group transition-all hover:border-gold/50 hover:bg-zinc-900/60"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 transition-colors group-hover:bg-gold/10 group-hover:text-gold">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest group-hover:text-white transition-colors">选择 (Pick P1)</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-center">
+                   <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-gold shadow-md">
+                     <Link className="w-5 h-5" />
+                   </div>
+                </div>
+
+                {/* Slot P2 */}
+                <div className="flex-1 flex flex-col gap-4">
+                   <div className="text-xs sm:text-sm font-black text-white uppercase tracking-widest flex items-center justify-center gap-3 px-2">
+                    <User className="w-5 h-5 text-gold" /> 第二位 (P2)
+                  </div>
+                  {shuanghePair.p2 ? (
+                    <div 
+                      onClick={() => setPickingFor('p2')}
+                      className="bg-zinc-900 border border-gold/50 rounded-3xl p-6 flex items-center gap-4 cursor-pointer hover:bg-zinc-800 transition-colors shadow-lg"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-base border border-gold/30">{shuanghePair.p2.name[0]}</div>
+                      <div className="flex flex-col">
+                         <span className="text-sm sm:text-base font-black text-white uppercase">{shuanghePair.p2.name}</span>
+                         <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">已选择 (Selected)</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => setPickingFor('p2')}
+                      className="h-32 bg-zinc-900/40 border-2 border-zinc-800 border-dashed rounded-3xl flex flex-col items-center justify-center gap-3 group transition-all hover:border-gold/50 hover:bg-zinc-900/60"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 transition-colors group-hover:bg-gold/10 group-hover:text-gold">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest group-hover:text-white transition-colors">选择 (Pick P2)</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PICKER MODAL */}
+          {pickingFor && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+              <div className="bg-zinc-950 border border-zinc-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+                <div className="p-6 border-b border-zinc-900 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">选择档案 (Pick Client)</h3>
+                    <p className="text-xs text-white font-bold uppercase tracking-widest opacity-80">Select someone to compare</p>
+                  </div>
+                  <button 
+                    onClick={() => setPickingFor(null)}
+                    className="p-3 hover:bg-zinc-900 rounded-xl transition-colors"
+                  >
+                    <ChevronLeft className="w-6 h-6 text-white" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+                  {savedClients.length === 0 ? (
+                    <div className="p-16 text-center text-white text-base font-bold uppercase tracking-widest italic opacity-40">
+                      没有找到档案 (No clients found)
+                    </div>
+                  ) : (
+                    savedClients.map(c => {
+                      const isSelected = shuanghePair.p1?.id === c.id || shuanghePair.p2?.id === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setShuanghePair(prev => ({
+                              ...prev,
+                              [pickingFor]: c
+                            }));
+                            setPickingFor(null);
+                          }}
+                          disabled={isSelected}
+                          className={cn(
+                            "group relative flex items-center gap-5 p-5 rounded-3xl transition-all text-left",
+                            isSelected ? "opacity-30 cursor-not-allowed bg-zinc-900/20" : "bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-800 hover:border-gold/50"
+                          )}
+                        >
+                          <div className="w-14 h-14 rounded-full bg-zinc-800 flex items-center justify-center text-white transition-colors group-hover:text-gold border border-zinc-700">
+                            <User className="w-7 h-7" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-base font-black text-white">{c.name}</span>
+                            <span className="text-xs text-white font-bold opacity-70">{c.birthDate} ({c.gender === 'male' ? '男' : '女'})</span>
+                          </div>
+                          {isSelected && <div className="ml-auto text-xs font-black text-gold uppercase tracking-widest">已选择</div>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
