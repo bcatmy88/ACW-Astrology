@@ -1432,17 +1432,17 @@ export default function App() {
         {view === 'form' && (
           <div className="flex flex-col gap-4">
             <header 
-              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg"
-              style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-3 sm:px-8 pt-10 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg"
+              style={{ paddingTop: 'max(2.75rem, calc(env(safe-area-inset-top, 0px) + 0.5rem))' }}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setView('list')}
-                  className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer active:scale-95"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer active:scale-95"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
-                <h2 className="text-base sm:text-lg font-bold text-white">
+                <h2 className="text-sm sm:text-base font-bold text-white">
                   {editingClientId 
                     ? (lang === 'zh' ? "修改档案" : "Edit Client") 
                     : (lang === 'zh' ? "添加档案" : "New Client")}
@@ -1559,34 +1559,35 @@ export default function App() {
         {view === 'analyze' && (
           <div className="flex flex-col gap-4">
             <header 
-              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg"
-              style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-3 sm:px-8 pt-10 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-1.5 sm:gap-2 mb-2 shadow-lg"
+              style={{ paddingTop: 'max(2.75rem, calc(env(safe-area-inset-top, 0px) + 0.5rem))' }}
             >
               <button 
                 onClick={() => {
                   setCurrentAnalysisClientId(null);
                   setView('list');
                 }}
-                className="h-10 px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center gap-2 text-sm font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer active:scale-95"
+                className="h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center gap-1 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
               >
-                <ChevronLeft className="w-5 h-5" />
-                <span>{lang === 'zh' ? '返回列表' : 'Back'}</span>
+                <ChevronLeft className="w-4 h-4 text-zinc-400 shrink-0" />
+                <span className="whitespace-nowrap">{lang === 'zh' ? '返回' : 'Back'}</span>
+                <span className="hidden sm:inline whitespace-nowrap">{lang === 'zh' ? '列表' : ''}</span>
               </button>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3.5 py-2 rounded-xl">
-                  <User className="w-4 h-4 text-gold" />
-                  <span className="text-sm font-black text-white">{clientName}</span>
-                  <span className="text-xs text-zinc-400 font-bold">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 bg-zinc-900 border border-zinc-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl h-9 sm:h-10 shrink min-w-0 max-w-[120px] sm:max-w-[220px]">
+                  <User className="w-3.5 h-3.5 text-gold shrink-0" />
+                  <span className="text-xs sm:text-sm font-bold text-white truncate whitespace-nowrap">{clientName}</span>
+                  <span className="text-[11px] sm:text-xs text-zinc-400 font-medium shrink-0 whitespace-nowrap">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
                   {currentAnalysisClientId && (
                     <button 
                       onClick={() => setAsMainUser(currentAnalysisClientId)}
                       className={cn(
-                        "ml-1 p-1 rounded-lg transition-all cursor-pointer",
+                        "p-0.5 sm:p-1 rounded-lg transition-all cursor-pointer shrink-0",
                         mainUserId === currentAnalysisClientId ? "text-gold" : "text-zinc-500 hover:text-gold"
                       )}
                       title={lang === 'zh' ? "设为本人" : "Set Main User"}
                     >
-                      <Crown className="w-4 h-4" />
+                      <Crown className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
@@ -1596,22 +1597,22 @@ export default function App() {
             </header>
 
             {/* Summary Information Table */}
-            <div className="grid grid-cols-2 gap-2.5 bg-zinc-900/60 border border-zinc-800 p-4 sm:p-5 rounded-2xl shadow-lg">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">姓名 (Name)</span>
-                <span className="text-base sm:text-lg font-bold text-white">{clientName}</span>
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 bg-zinc-900/60 border border-zinc-800 p-3.5 sm:p-5 rounded-2xl shadow-lg">
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">姓名 (Name)</span>
+                <span className="text-sm sm:text-base font-bold text-white truncate">{clientName}</span>
               </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">岁数 (Age)</span>
-                <span className="text-base sm:text-lg font-bold text-gold">{calculateWesternAge(birthDate)} 岁</span>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">岁数 (Age)</span>
+                <span className="text-sm sm:text-base font-bold text-gold">{calculateWesternAge(birthDate)} 岁</span>
               </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">生日日期 (阳历 Solar)</span>
-                <span className="text-sm font-bold text-zinc-200">{solar.toYmd()} {birthTime}</span>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">生日日期 (阳历 Solar)</span>
+                <span className="text-xs sm:text-sm font-semibold text-zinc-200 leading-snug break-words">{solar.toYmd()} {birthTime}</span>
               </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">生日日期 (农历 Lunar)</span>
-                <span className="text-sm font-bold text-zinc-200">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">生日日期 (农历 Lunar)</span>
+                <span className="text-xs sm:text-sm font-semibold text-zinc-200 leading-snug break-words">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
               </div>
             </div>
 
