@@ -348,7 +348,10 @@ export default function AppointmentsView({
   return (
     <div className="flex flex-col gap-4 relative">
       {/* HEADER BAR */}
-      <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-3.5 sm:px-8 pt-6 sm:pt-10 pb-3 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-2 mb-2 shadow-lg">
+      <header 
+        className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-3.5 sm:px-8 pt-12 sm:pt-12 pb-3 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-2 mb-2 shadow-lg"
+        style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+      >
         <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
           <button 
             type="button"

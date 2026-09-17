@@ -1052,7 +1052,10 @@ export default function App() {
         {/* VIEW 1: CLIENT LIST (FRONT PAGE) */}
         {view === 'list' && (
           <div className="flex flex-col gap-4 relative">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg">
+            <header 
+              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg"
+              style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+            >
               <div className="flex items-center gap-2.5">
                 <button 
                   onClick={() => setIsSideMenuOpen(true)}
@@ -1367,7 +1370,10 @@ export default function App() {
         {/* VIEW 2: ADD NEW CLIENT FORM */}
         {view === 'form' && (
           <div className="flex flex-col gap-4">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg">
+            <header 
+              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg"
+              style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+            >
               <div className="flex items-center gap-2.5">
                 <button 
                   onClick={() => setView('list')}
@@ -1491,7 +1497,10 @@ export default function App() {
         {/* VIEW 3: ANALYSIS VIEW (THE BAZI GRID) */}
         {view === 'analyze' && (
           <div className="flex flex-col gap-4">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg">
+            <header 
+              className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg"
+              style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+            >
               <button 
                 onClick={() => {
                   setCurrentAnalysisClientId(null);

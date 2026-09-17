@@ -166,7 +166,10 @@ export default function BackupView({
   return (
     <div className="max-w-[760px] mx-auto flex flex-col gap-4">
       {/* HEADER */}
-      <header className="sticky top-0 z-40 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between">
+      <header 
+        className="sticky top-0 z-40 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between"
+        style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+      >
         <div className="flex items-center gap-2.5">
           <button 
             onClick={onOpenMenu}
