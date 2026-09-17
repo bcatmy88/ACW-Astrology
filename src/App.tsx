@@ -33,11 +33,21 @@ import {
   Home,
   Skull,
   Shield,
-  Menu
+  Menu,
+  ClipboardList,
+  BookOpen,
+  CalendarDays,
+  Database
 } from 'lucide-react';
 import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { SavedClient, CaseItem, NoteItem, AppointmentItem, BackupData, AppLanguage } from './types';
+import PendingCasesView from './components/PendingCasesView';
+import NotesView from './components/NotesView';
+import BackupView from './components/BackupView';
+import AppointmentsView from './components/AppointmentsView';
+import LanguageToggle from './components/LanguageToggle';
 
 // --- Types ---
 interface BaziData {
@@ -47,18 +57,6 @@ interface BaziData {
   yun: any;
   gender: number;
   dayGan: string;
-}
-
-interface SavedClient {
-  id: string;
-  name: string;
-  phone: string;
-  birthDate: string;
-  birthTime: string;
-  latitude: number;
-  longitude: number;
-  gender: 'male' | 'female';
-  createdAt: any;
 }
 
 // --- Utilities ---
@@ -342,222 +340,14 @@ function DestinyCard({ client, onReplace }: { client: SavedClient, onReplace: ()
   );
 }
 
-// --- Relationship Compare View (Requested) ---
-function RelationshipCompareView({ p1, p2, onReplaceP1, onReplaceP2 }: { p1: SavedClient, p2: SavedClient, onReplaceP1: () => void, onReplaceP2: () => void }) {
-  const currentYear = new Date().getFullYear();
-
-  const getProfile = (client: SavedClient) => {
-    try {
-      const [y, m, d] = client.birthDate.split('-').map(Number);
-      const [hh, mm] = client.birthTime.split(':').map(Number);
-      const solar = Solar.fromYmdHms(y, m, d, hh, mm, 0);
-      const lunar = solar.getLunar();
-      const eightChar = lunar.getEightChar();
-      const genderNum = client.gender === 'male' ? 1 : 0;
-      const yun = eightChar.getYun(genderNum);
-
-      // Liu Nian for current year
-      const daYun = yun.getDaYun();
-      // Find LiuNian in any DaYun
-      let currentLiuNian = null;
-      for (const dy of daYun) {
-        const ln = dy.getLiuNian().find((l: any) => l.getYear() === currentYear);
-        if (ln) {
-          currentLiuNian = ln;
-          break;
-        }
-      }
-      if (!currentLiuNian) currentLiuNian = daYun[0].getLiuNian()[0];
-      
-      const currentLiuYue = currentLiuNian.getLiuYue().find((m: any) => (m.getIndex() + 1) === (new Date().getMonth() + 1)) || currentLiuNian.getLiuYue()[0];
-      
-      // Numerology
-      const yearRoot = getRootDigit(y);
-      const monthRoot = getRootDigit(m);
-      const dayRoot = getRootDigit(d);
-      const coreRoot = getRootDigit(yearRoot + monthRoot + dayRoot);
-      const currentYearRoot = getRootDigit(currentYear);
-      // Corrected: coreRoot + sum of current year digits
-      const personalYear = getRootDigit(coreRoot + currentYearRoot);
-
-      // Thai House (Current Year)
-      const ageAtCurrentYear = currentYear - y;
-      const count = ageAtCurrentYear === 0 ? 1 : ageAtCurrentYear + 1;
-      let houseIndex = 0;
-      if (genderNum === 1) {
-        houseIndex = (12 - (count - 1) % 12) % 12;
-      } else {
-        houseIndex = (count - 1) % 12;
-      }
-      const thaiSymbol = THAI_DESTINY_SYMBOLS[houseIndex];
-
-      return {
-        eightChar,
-        liuNian: currentLiuNian,
-        liuYue: currentLiuYue,
-        numerology: { core: coreRoot, personalYear },
-        thaiSymbol,
-        age: ageAtCurrentYear + 1
-      };
-    } catch (e) {
-      console.error(e);
-      return null;
-    }
-  };
-
-  const prof1 = useMemo(() => getProfile(p1), [p1, currentYear]);
-  const prof2 = useMemo(() => getProfile(p2), [p2, currentYear]);
-
-  if (!prof1 || !prof2) return null;
-
-  const categories = [
-    {
-      title: "四柱八字 (Bazi)",
-      icon: Zap,
-      rows: [
-        { label: "时柱", val1: prof1.eightChar.getTime(), val2: prof2.eightChar.getTime() },
-        { label: "日柱", val1: prof1.eightChar.getDay(), val2: prof2.eightChar.getDay() },
-        { label: "月柱", val1: prof1.eightChar.getMonth(), val2: prof2.eightChar.getMonth() },
-        { label: "年柱", val1: prof1.eightChar.getYear(), val2: prof2.eightChar.getYear() },
-        { label: "流年", val1: prof1.liuNian.getGanZhi(), val2: prof2.liuNian.getGanZhi(), isSpecial: true },
-      ]
-    },
-    {
-      title: "生命数字 (Numerology)",
-      icon: Hash,
-      rows: [
-        { label: "核心数字", val1: prof1.numerology.core, val2: prof2.numerology.core },
-        { label: "流年数字", val1: prof1.numerology.personalYear, val2: prof2.numerology.personalYear, isSpecial: true },
-      ]
-    },
-    {
-      title: "十二命宫 (Thai Houses)",
-      icon: LayoutGrid,
-      rows: [
-        { 
-          label: "当前命宫", 
-          val1: prof1.thaiSymbol, 
-          val2: prof2.thaiSymbol, 
-          isThai: true 
-        },
-      ]
-    }
-  ];
-
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col w-full max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="bg-zinc-800/80 p-4 border-b border-zinc-700 grid grid-cols-[1fr_50px_1fr] items-center">
-        <div className="flex items-center gap-3 cursor-pointer hover:bg-zinc-700/50 p-2 rounded-xl transition-colors" onClick={onReplaceP1}>
-          <div className="w-12 h-12 rounded-full bg-zinc-950 border border-gold/30 flex items-center justify-center text-gold font-black text-sm shrink-0">
-            {p1.name[0]}
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm sm:text-base font-black text-white uppercase truncate">{p1.name}</span>
-            <span className="text-[10px] sm:text-xs text-white font-bold">{p1.gender === 'male' ? '乾 (Male)' : '坤 (Female)'}</span>
-          </div>
-        </div>
-        <div className="flex justify-center">
-          <Link className="w-6 h-6 text-gold" />
-        </div>
-        <div className="flex items-center gap-3 justify-end cursor-pointer hover:bg-zinc-700/50 p-2 rounded-xl transition-colors text-right" onClick={onReplaceP2}>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm sm:text-base font-black text-white uppercase truncate">{p2.name}</span>
-            <span className="text-[10px] sm:text-xs text-white font-bold">{p2.gender === 'male' ? '乾 (Male)' : '坤 (Female)'}</span>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-zinc-950 border border-gold/30 flex items-center justify-center text-gold font-black text-sm shrink-0">
-            {p2.name[0]}
-          </div>
-        </div>
-      </div>
-
-      <div className="p-4 flex flex-col gap-6">
-        {categories.map((cat, idx) => (
-          <div key={idx} className="flex flex-col gap-2.5">
-            <span className="text-xs sm:text-sm font-black text-white uppercase tracking-widest flex items-center gap-2.5 px-1">
-              <cat.icon className="w-4 h-4 sm:w-5 sm:h-5 text-gold" /> {cat.title}
-            </span>
-            <div className="bg-zinc-950 border border-zinc-800/50 rounded-2xl overflow-hidden divide-y divide-zinc-900 shadow-inner">
-              {cat.rows.map((row, rIdx) => (
-                <div key={rIdx} className={cn(
-                  "grid grid-cols-[80px_1fr_1fr] sm:grid-cols-[100px_1fr_1fr] items-center min-h-[50px]",
-                  row.isSpecial ? "bg-gold/10" : "bg-zinc-950"
-                )}>
-                  <div className="p-3 border-r border-zinc-900/50 bg-zinc-900/40 text-[10px] sm:text-xs font-black text-white uppercase tracking-tighter text-center">
-                    {row.label}
-                  </div>
-                  
-                  {row.isThai ? (
-                    <>
-                      <div className="p-3 border-r border-zinc-900/50 flex flex-col items-center gap-1.5">
-                        {(() => {
-                           const icons: Record<string, any> = { Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield };
-                           const Icon = icons[(row.val1 as any).icon] || Sparkles;
-                           return <Icon className={cn("w-6 h-6 sm:w-8 sm:h-8", (row.val1 as any).color)} />;
-                        })()}
-                        <span className="text-[10px] sm:text-xs font-black text-white text-center leading-tight">{(row.val1 as any).meaning}</span>
-                      </div>
-                      <div className="p-3 flex flex-col items-center gap-1.5">
-                        {(() => {
-                           const icons: Record<string, any> = { Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield };
-                           const Icon = icons[(row.val2 as any).icon] || Sparkles;
-                           return <Icon className={cn("w-6 h-6 sm:w-8 sm:h-8", (row.val2 as any).color)} />;
-                        })()}
-                        <span className="text-[10px] sm:text-xs font-black text-white text-center leading-tight">{(row.val2 as any).meaning}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="p-3 border-r border-zinc-900/50 text-center">
-                        <span className={cn(
-                          "text-sm sm:text-lg font-black",
-                          typeof row.val1 === 'string' ? "font-serif tracking-widest" : "text-gold"
-                        )}>
-                          {typeof row.val1 === 'string' ? (
-                            <>
-                              <span className={getBaziColorClass(row.val1[0])}>{row.val1[0]}</span>
-                              <span className={getBaziColorClass(row.val1[1])}>{row.val1[1]}</span>
-                            </>
-                          ) : row.val1}
-                        </span>
-                      </div>
-                      <div className="p-3 text-center">
-                        <span className={cn(
-                          "text-sm sm:text-lg font-black",
-                          typeof row.val2 === 'string' ? "font-serif tracking-widest" : "text-gold"
-                        )}>
-                          {typeof row.val2 === 'string' ? (
-                            <>
-                              <span className={getBaziColorClass(row.val2[0])}>{row.val2[0]}</span>
-                              <span className={getBaziColorClass(row.val2[1])}>{row.val2[1]}</span>
-                            </>
-                          ) : row.val2}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <div className="p-3 bg-zinc-800/30 rounded-xl border border-zinc-700/30 text-[10px] sm:text-xs text-white font-bold text-center uppercase tracking-widest">
-          {currentYear}年 双合盘同步分析 v1.0
-        </div>
-      </div>
-    </div>
-
-  );
-}
-
 // --- Main App ---
 export default function App() {
-  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'shuanghepan'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'cases' | 'notes' | 'backup' | 'appointments'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
-  const [shuanghePair, setShuanghePair] = useState<{ p1: SavedClient | null, p2: SavedClient | null }>({ p1: null, p2: null });
-  const [pickingFor, setPickingFor] = useState<'p1' | 'p2' | null>(null);
+  const [cases, setCases] = useState<CaseItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
 
   const [birthDate, setBirthDate] = useState('1990-05-20');
   const [birthTime, setBirthTime] = useState('10:30');
@@ -582,10 +372,24 @@ export default function App() {
   const [currentAnalysisClientId, setCurrentAnalysisClientId] = useState<string | null>(null);
   const [showMainUserPicker, setShowMainUserPicker] = useState(false);
 
-  // Load clients from LocalStorage on mount
+  const [lang, setLangState] = useState<AppLanguage>(() => {
+    const savedLang = localStorage.getItem('archan_wang_lang');
+    return (savedLang === 'en' || savedLang === 'zh') ? savedLang : 'zh';
+  });
+
+  const handleSetLang = (newLang: AppLanguage) => {
+    setLangState(newLang);
+    localStorage.setItem('archan_wang_lang', newLang);
+  };
+
+  // Load clients, cases, notes, appointments from LocalStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('archan_wang_clients');
     const mainId = localStorage.getItem('archan_wang_main_user_id');
+    const savedCases = localStorage.getItem('archan_wang_cases');
+    const savedNotes = localStorage.getItem('archan_wang_notes');
+    const savedAppointments = localStorage.getItem('archan_wang_appointments');
+
     if (saved) {
       try {
         setSavedClients(JSON.parse(saved));
@@ -594,11 +398,167 @@ export default function App() {
       }
     }
     if (mainId) setMainUserId(mainId);
+
+    if (savedCases) {
+      try {
+        setCases(JSON.parse(savedCases));
+      } catch (e) {
+        console.error("Error parsing cases", e);
+      }
+    }
+
+    if (savedNotes) {
+      try {
+        setNotes(JSON.parse(savedNotes));
+      } catch (e) {
+        console.error("Error parsing notes", e);
+      }
+    }
+
+    if (savedAppointments) {
+      try {
+        setAppointments(JSON.parse(savedAppointments));
+      } catch (e) {
+        console.error("Error parsing appointments", e);
+      }
+    }
   }, []);
 
   const saveToLocalStorage = (updatedClients: SavedClient[]) => {
     localStorage.setItem('archan_wang_clients', JSON.stringify(updatedClients));
     setSavedClients(updatedClients);
+  };
+
+  const handleSaveCase = (caseItem: CaseItem) => {
+    setCases(prev => {
+      const exists = prev.some(c => c.id === caseItem.id);
+      const updated = exists 
+        ? prev.map(c => c.id === caseItem.id ? caseItem : c)
+        : [caseItem, ...prev];
+      localStorage.setItem('archan_wang_cases', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleDeleteCase = (caseId: string) => {
+    setCases(prev => {
+      const updated = prev.filter(c => c.id !== caseId);
+      localStorage.setItem('archan_wang_cases', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleSaveNote = (noteItem: NoteItem) => {
+    setNotes(prev => {
+      const exists = prev.some(n => n.id === noteItem.id);
+      const updated = exists
+        ? prev.map(n => n.id === noteItem.id ? noteItem : n)
+        : [noteItem, ...prev];
+      localStorage.setItem('archan_wang_notes', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    setNotes(prev => {
+      const updated = prev.filter(n => n.id !== noteId);
+      localStorage.setItem('archan_wang_notes', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleSaveAppointment = (aptItem: AppointmentItem) => {
+    setAppointments(prev => {
+      const exists = prev.some(a => a.id === aptItem.id);
+      const updated = exists
+        ? prev.map(a => a.id === aptItem.id ? aptItem : a)
+        : [aptItem, ...prev];
+      localStorage.setItem('archan_wang_appointments', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleDeleteAppointment = (aptId: string) => {
+    setAppointments(prev => {
+      const updated = prev.filter(a => a.id !== aptId);
+      localStorage.setItem('archan_wang_appointments', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleRestoreData = (backup: BackupData, mode: 'overwrite' | 'merge') => {
+    if (mode === 'overwrite') {
+      const newClients = backup.clients || [];
+      const newCases = backup.cases || [];
+      const newNotes = backup.notes || [];
+      const newAppointments = backup.appointments || [];
+      const newMainId = backup.mainUserId || null;
+
+      setSavedClients(newClients);
+      setCases(newCases);
+      setNotes(newNotes);
+      setAppointments(newAppointments);
+      setMainUserId(newMainId);
+
+      localStorage.setItem('archan_wang_clients', JSON.stringify(newClients));
+      localStorage.setItem('archan_wang_cases', JSON.stringify(newCases));
+      localStorage.setItem('archan_wang_notes', JSON.stringify(newNotes));
+      localStorage.setItem('archan_wang_appointments', JSON.stringify(newAppointments));
+      if (newMainId) {
+        localStorage.setItem('archan_wang_main_user_id', newMainId);
+      } else {
+        localStorage.removeItem('archan_wang_main_user_id');
+      }
+    } else {
+      setSavedClients(prevClients => {
+        const clientMap = new Map<string, SavedClient>();
+        prevClients.forEach(c => clientMap.set(c.id, c));
+        (backup.clients || []).forEach(c => clientMap.set(c.id, c));
+        const merged = Array.from(clientMap.values());
+        localStorage.setItem('archan_wang_clients', JSON.stringify(merged));
+        return merged;
+      });
+
+      setCases(prevCases => {
+        const caseMap = new Map<string, CaseItem>();
+        prevCases.forEach(c => caseMap.set(c.id, c));
+        (backup.cases || []).forEach(c => caseMap.set(c.id, c));
+        const merged = Array.from(caseMap.values());
+        localStorage.setItem('archan_wang_cases', JSON.stringify(merged));
+        return merged;
+      });
+
+      setNotes(prevNotes => {
+        const noteMap = new Map<string, NoteItem>();
+        prevNotes.forEach(n => noteMap.set(n.id, n));
+        (backup.notes || []).forEach(n => noteMap.set(n.id, n));
+        const merged = Array.from(noteMap.values());
+        localStorage.setItem('archan_wang_notes', JSON.stringify(merged));
+        return merged;
+      });
+
+      setAppointments(prevApts => {
+        const aptMap = new Map<string, AppointmentItem>();
+        prevApts.forEach(a => aptMap.set(a.id, a));
+        (backup.appointments || []).forEach(a => aptMap.set(a.id, a));
+        const merged = Array.from(aptMap.values());
+        localStorage.setItem('archan_wang_appointments', JSON.stringify(merged));
+        return merged;
+      });
+    }
+  };
+
+  const handleClearAllData = () => {
+    setSavedClients([]);
+    setCases([]);
+    setNotes([]);
+    setAppointments([]);
+    setMainUserId(null);
+    localStorage.removeItem('archan_wang_clients');
+    localStorage.removeItem('archan_wang_cases');
+    localStorage.removeItem('archan_wang_notes');
+    localStorage.removeItem('archan_wang_appointments');
+    localStorage.removeItem('archan_wang_main_user_id');
   };
 
   const setAsMainUser = (id: string, e?: React.MouseEvent) => {
@@ -952,41 +912,132 @@ export default function App() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
-                    <h1 className="text-lg font-black text-white tracking-widest uppercase leading-none">阿赞旺命理</h1>
-                    <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase">ACW Destiny System</span>
+                    <h1 className="text-base font-bold text-white tracking-wide leading-none">
+                      {lang === 'zh' ? '阿赞旺命理' : 'ACW Destiny'}
+                    </h1>
+                    <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase mt-1">ACW Destiny System</span>
                   </div>
-                  <button onClick={() => setIsSideMenuOpen(false)} className="p-2 hover:bg-zinc-900 rounded-lg text-zinc-500 transition-colors">
-                    <ChevronLeft className="w-5 h-5" />
+                  <button onClick={() => setIsSideMenuOpen(false)} className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-white transition-colors">
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
                 </div>
+
+                <div className="flex items-center justify-between py-2 px-3 bg-zinc-900/60 border border-zinc-900 rounded-xl">
+                  <span className="text-xs font-semibold text-zinc-400">
+                    {lang === 'zh' ? '系统语言' : 'Language'}
+                  </span>
+                  <LanguageToggle lang={lang} onToggle={handleSetLang} />
+                </div>
                 
-                <nav className="flex flex-col gap-2">
+                <nav className="flex flex-col gap-1.5">
                   <button 
                     onClick={() => {
                       setView('list');
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 p-4 rounded-2xl transition-all font-bold text-sm",
-                      view === 'list' ? "bg-gold text-zinc-950 shadow-lg shadow-gold/10" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
+                      view === 'list' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <Home className="w-5 h-5" />
-                    档案列表 (Dashboard)
+                    <div className="flex items-center gap-2.5">
+                      <Home className="w-4 h-4" />
+                      <span>{lang === 'zh' ? '档案' : 'Archives'}</span>
+                    </div>
+                    {savedClients.length > 0 && (
+                      <span className={cn(
+                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        view === 'list' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
+                      )}>
+                        {savedClients.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setView('appointments');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
+                      view === 'appointments' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <CalendarDays className="w-4 h-4" />
+                      <span>{lang === 'zh' ? '预约' : 'Appointments'}</span>
+                    </div>
+                    {appointments.length > 0 && (
+                      <span className={cn(
+                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        view === 'appointments' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
+                      )}>
+                        {appointments.length}
+                      </span>
+                    )}
                   </button>
                   
                   <button 
                     onClick={() => {
-                      setView('shuanghepan');
+                      setView('cases');
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center gap-3 p-4 rounded-2xl transition-all font-bold text-sm",
-                      view === 'shuanghepan' ? "bg-gold text-zinc-950 shadow-lg shadow-gold/10" : "text-zinc-500 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
+                      view === 'cases' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <HeartPulse className="w-5 h-5" />
-                    双合盘 (Relationship)
+                    <div className="flex items-center gap-2.5">
+                      <ClipboardList className="w-4 h-4" />
+                      <span>{lang === 'zh' ? '个案' : 'Cases'}</span>
+                    </div>
+                    {cases.length > 0 && (
+                      <span className={cn(
+                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        view === 'cases' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
+                      )}>
+                        {cases.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setView('notes');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
+                      view === 'notes' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <BookOpen className="w-4 h-4" />
+                      <span>{lang === 'zh' ? '笔记' : 'Notes'}</span>
+                    </div>
+                    {notes.length > 0 && (
+                      <span className={cn(
+                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        view === 'notes' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
+                      )}>
+                        {notes.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setView('backup');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-2.5 p-3 rounded-xl transition-all font-semibold text-xs",
+                      view === 'backup' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <Database className="w-4 h-4" />
+                    <span>{lang === 'zh' ? '备份' : 'Backup'}</span>
                   </button>
                 </nav>
 
@@ -1001,19 +1052,25 @@ export default function App() {
         {/* VIEW 1: CLIENT LIST (FRONT PAGE) */}
         {view === 'list' && (
           <div className="flex flex-col gap-4 relative">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-11 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
-              <div className="flex items-center gap-3">
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg">
+              <div className="flex items-center gap-2.5">
                 <button 
                   onClick={() => setIsSideMenuOpen(true)}
-                  className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400"
+                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white"
                 >
-                  <Menu className="w-5 h-5" />
+                  <Menu className="w-4 h-4" />
                 </button>
-                <div className="flex flex-col">
-                  <h1 className="text-lg font-black text-white tracking-widest uppercase leading-none">阿赞旺命理</h1>
-                  <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase">ACW Destiny System</span>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-sm sm:text-base font-bold text-white tracking-wide leading-none">
+                    {lang === 'zh' ? '阿赞旺命理' : 'ACW Destiny'}
+                  </h1>
+                  <span className="text-[10px] text-gold font-bold px-1.5 py-0.5 rounded bg-gold/10 border border-gold/30">
+                    {savedClients.length}
+                  </span>
                 </div>
               </div>
+
+              <LanguageToggle lang={lang} onToggle={handleSetLang} />
             </header>
 
             {/* MAIN USER DASHBOARD */}
@@ -1196,25 +1253,25 @@ export default function App() {
                        </span>
                         <div className="grid grid-cols-4 items-center">
                           <div className="flex flex-col items-center">
-                            <div className="mb-1 leading-none text-center">
+                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{coreNumber}</span>
                             </div>
                             <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">核心</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="mb-1 leading-none text-center">
+                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numYear}</span>
                             </div>
                             <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流年</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="mb-1 leading-none text-center">
+                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numMonth}</span>
                             </div>
                             <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流月</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="mb-1 leading-none text-center">
+                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numDay}</span>
                             </div>
                             <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流日</span>
@@ -1310,15 +1367,23 @@ export default function App() {
         {/* VIEW 2: ADD NEW CLIENT FORM */}
         {view === 'form' && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4 pt-12 pb-2">
-              <button 
-                onClick={() => setView('list')}
-                className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-90 transition-all"
-              >
-                <ChevronLeft className="w-6 h-6 text-zinc-400" />
-              </button>
-              <h2 className="text-lg font-bold">{editingClientId ? "修改档案" : "添加新档案"}</h2>
-            </div>
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg">
+              <div className="flex items-center gap-2.5">
+                <button 
+                  onClick={() => setView('list')}
+                  className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <h2 className="text-sm sm:text-base font-bold text-white">
+                  {editingClientId 
+                    ? (lang === 'zh' ? "修改档案" : "Edit Client") 
+                    : (lang === 'zh' ? "添加档案" : "New Client")}
+                </h2>
+              </div>
+
+              <LanguageToggle lang={lang} onToggle={handleSetLang} />
+            </header>
 
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-2xl flex flex-col gap-6 mb-10">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1426,33 +1491,37 @@ export default function App() {
         {/* VIEW 3: ANALYSIS VIEW (THE BAZI GRID) */}
         {view === 'analyze' && (
           <div className="flex flex-col gap-4">
-            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-11 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
+            <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 pb-2.5 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between mb-2 shadow-lg">
               <button 
                 onClick={() => {
                   setCurrentAnalysisClientId(null);
                   setView('list');
                 }}
-                className="flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-white transition-colors"
+                className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
-                返回列表 (BACK)
+                <span>{lang === 'zh' ? '返回列表' : 'Back'}</span>
               </button>
-              <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
-                <User className="w-3.5 h-3.5 text-gold" />
-                <span className="text-xs font-black">{clientName}</span>
-                <span className="text-xs text-zinc-500 font-bold">({gender === 1 ? '男' : '女'})</span>
-                {currentAnalysisClientId && (
-                  <button 
-                    onClick={() => setAsMainUser(currentAnalysisClientId)}
-                    className={cn(
-                      "ml-2 p-1 rounded-md transition-all",
-                      mainUserId === currentAnalysisClientId ? "text-gold" : "text-zinc-600 hover:text-gold"
-                    )}
-                    title="设为本人 (Set as Main User)"
-                  >
-                    <Crown className="w-4 h-4" />
-                  </button>
-                )}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
+                  <User className="w-3.5 h-3.5 text-gold" />
+                  <span className="text-xs font-black text-white">{clientName}</span>
+                  <span className="text-xs text-zinc-500 font-bold">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
+                  {currentAnalysisClientId && (
+                    <button 
+                      onClick={() => setAsMainUser(currentAnalysisClientId)}
+                      className={cn(
+                        "ml-1 p-0.5 rounded transition-all",
+                        mainUserId === currentAnalysisClientId ? "text-gold" : "text-zinc-600 hover:text-gold"
+                      )}
+                      title={lang === 'zh' ? "设为本人" : "Set Main User"}
+                    >
+                      <Crown className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <LanguageToggle lang={lang} onToggle={handleSetLang} />
               </div>
             </header>
 
@@ -2562,174 +2631,60 @@ export default function App() {
         )}
       </div>
 
-      {/* VIEW 4: SHUANG HE PAN */}
-      {view === 'shuanghepan' && (
-        <div className="max-w-[800px] mx-auto flex flex-col gap-6">
-          <header className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-11 pb-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800 flex items-center justify-between mb-2 shadow-lg">
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setIsSideMenuOpen(true)}
-                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="flex flex-col">
-                <h1 className="text-lg font-black text-white tracking-widest uppercase leading-none">双合盘</h1>
-                <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase">Relationship Sync</span>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              {(shuanghePair.p1 || shuanghePair.p2) && (
-                <button 
-                  onClick={() => setShuanghePair({ p1: null, p2: null })}
-                  className="px-3 py-1.5 text-[10px] font-black text-zinc-500 hover:text-white uppercase transition-colors"
-                >
-                  重置 (Reset)
-                </button>
-              )}
-              <button 
-                onClick={() => setView('list')}
-                className="p-2 text-zinc-500 hover:text-white transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-            </div>
-          </header>
+      {/* VIEW: APPOINTMENTS */}
+      {view === 'appointments' && (
+        <AppointmentsView
+          appointments={appointments}
+          savedClients={savedClients}
+          onSaveAppointment={handleSaveAppointment}
+          onDeleteAppointment={handleDeleteAppointment}
+          onOpenMenu={() => setIsSideMenuOpen(true)}
+          onInspectClientBazi={(client) => loadClient(client)}
+          lang={lang}
+          onToggleLang={handleSetLang}
+        />
+      )}
 
-          <div className="flex flex-col gap-8 items-center pt-6">
-            {shuanghePair.p1 && shuanghePair.p2 ? (
-              <RelationshipCompareView 
-                p1={shuanghePair.p1} 
-                p2={shuanghePair.p2} 
-                onReplaceP1={() => setPickingFor('p1')}
-                onReplaceP2={() => setPickingFor('p2')}
-              />
-            ) : (
-              <div className="flex flex-col md:flex-row gap-8 w-full max-w-2xl mx-auto items-stretch">
-                {/* Slot P1 */}
-                <div className="flex-1 flex flex-col gap-4">
-                  <div className="text-xs sm:text-sm font-black text-white uppercase tracking-widest flex items-center justify-center gap-3 px-2">
-                    <User className="w-5 h-5 text-gold" /> 第一位 (P1)
-                  </div>
-                  {shuanghePair.p1 ? (
-                    <div 
-                      onClick={() => setPickingFor('p1')}
-                      className="bg-zinc-900 border border-gold/50 rounded-3xl p-6 flex items-center gap-4 cursor-pointer hover:bg-zinc-800 transition-colors shadow-lg"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-base border border-gold/30">{shuanghePair.p1.name[0]}</div>
-                      <div className="flex flex-col">
-                         <span className="text-sm sm:text-base font-black text-white uppercase">{shuanghePair.p1.name}</span>
-                         <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">已选择 (Selected)</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => setPickingFor('p1')}
-                      className="h-32 bg-zinc-900/40 border-2 border-zinc-800 border-dashed rounded-3xl flex flex-col items-center justify-center gap-3 group transition-all hover:border-gold/50 hover:bg-zinc-900/60"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 transition-colors group-hover:bg-gold/10 group-hover:text-gold">
-                        <Plus className="w-6 h-6" />
-                      </div>
-                      <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest group-hover:text-white transition-colors">选择 (Pick P1)</span>
-                    </button>
-                  )}
-                </div>
+      {/* VIEW: PENDING CASES */}
+      {view === 'cases' && (
+        <PendingCasesView
+          cases={cases}
+          savedClients={savedClients}
+          onSaveCase={handleSaveCase}
+          onDeleteCase={handleDeleteCase}
+          onOpenMenu={() => setIsSideMenuOpen(true)}
+          onInspectClientBazi={(client) => loadClient(client)}
+          lang={lang}
+          onToggleLang={handleSetLang}
+        />
+      )}
 
-                <div className="flex items-center justify-center">
-                   <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-gold shadow-md">
-                     <Link className="w-5 h-5" />
-                   </div>
-                </div>
+      {/* VIEW: NOTES */}
+      {view === 'notes' && (
+        <NotesView
+          notes={notes}
+          onSaveNote={handleSaveNote}
+          onDeleteNote={handleDeleteNote}
+          onOpenMenu={() => setIsSideMenuOpen(true)}
+          lang={lang}
+          onToggleLang={handleSetLang}
+        />
+      )}
 
-                {/* Slot P2 */}
-                <div className="flex-1 flex flex-col gap-4">
-                   <div className="text-xs sm:text-sm font-black text-white uppercase tracking-widest flex items-center justify-center gap-3 px-2">
-                    <User className="w-5 h-5 text-gold" /> 第二位 (P2)
-                  </div>
-                  {shuanghePair.p2 ? (
-                    <div 
-                      onClick={() => setPickingFor('p2')}
-                      className="bg-zinc-900 border border-gold/50 rounded-3xl p-6 flex items-center gap-4 cursor-pointer hover:bg-zinc-800 transition-colors shadow-lg"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-base border border-gold/30">{shuanghePair.p2.name[0]}</div>
-                      <div className="flex flex-col">
-                         <span className="text-sm sm:text-base font-black text-white uppercase">{shuanghePair.p2.name}</span>
-                         <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">已选择 (Selected)</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={() => setPickingFor('p2')}
-                      className="h-32 bg-zinc-900/40 border-2 border-zinc-800 border-dashed rounded-3xl flex flex-col items-center justify-center gap-3 group transition-all hover:border-gold/50 hover:bg-zinc-900/60"
-                    >
-                      <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 transition-colors group-hover:bg-gold/10 group-hover:text-gold">
-                        <Plus className="w-6 h-6" />
-                      </div>
-                      <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest group-hover:text-white transition-colors">选择 (Pick P2)</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* PICKER MODAL */}
-          {pickingFor && (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[110] flex items-center justify-center p-4">
-              <div className="bg-zinc-950 border border-zinc-900 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-                <div className="p-6 border-b border-zinc-900 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">选择档案 (Pick Client)</h3>
-                    <p className="text-xs text-white font-bold uppercase tracking-widest opacity-80">Select someone to compare</p>
-                  </div>
-                  <button 
-                    onClick={() => setPickingFor(null)}
-                    className="p-3 hover:bg-zinc-900 rounded-xl transition-colors"
-                  >
-                    <ChevronLeft className="w-6 h-6 text-white" />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
-                  {savedClients.length === 0 ? (
-                    <div className="p-16 text-center text-white text-base font-bold uppercase tracking-widest italic opacity-40">
-                      没有找到档案 (No clients found)
-                    </div>
-                  ) : (
-                    savedClients.map(c => {
-                      const isSelected = shuanghePair.p1?.id === c.id || shuanghePair.p2?.id === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          onClick={() => {
-                            setShuanghePair(prev => ({
-                              ...prev,
-                              [pickingFor]: c
-                            }));
-                            setPickingFor(null);
-                          }}
-                          disabled={isSelected}
-                          className={cn(
-                            "group relative flex items-center gap-5 p-5 rounded-3xl transition-all text-left",
-                            isSelected ? "opacity-30 cursor-not-allowed bg-zinc-900/20" : "bg-zinc-900/40 hover:bg-zinc-900 border border-zinc-800 hover:border-gold/50"
-                          )}
-                        >
-                          <div className="w-14 h-14 rounded-full bg-zinc-800 flex items-center justify-center text-white transition-colors group-hover:text-gold border border-zinc-700">
-                            <User className="w-7 h-7" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="text-base font-black text-white">{c.name}</span>
-                            <span className="text-xs text-white font-bold opacity-70">{c.birthDate} ({c.gender === 'male' ? '男' : '女'})</span>
-                          </div>
-                          {isSelected && <div className="ml-auto text-xs font-black text-gold uppercase tracking-widest">已选择</div>}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* VIEW: DATA BACKUP */}
+      {view === 'backup' && (
+        <BackupView
+          savedClients={savedClients}
+          cases={cases}
+          notes={notes}
+          appointments={appointments}
+          mainUserId={mainUserId}
+          onRestoreData={handleRestoreData}
+          onClearAllData={handleClearAllData}
+          onOpenMenu={() => setIsSideMenuOpen(true)}
+          lang={lang}
+          onToggleLang={handleSetLang}
+        />
       )}
     </div>
   );

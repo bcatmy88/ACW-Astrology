@@ -2,5 +2,7 @@
   "name": "阿赞旺 命理系统",
   "description": "A high-precision Bazi (Four Pillars of Destiny) calculator featuring Big Fate, Annual, and Monthly cycles.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

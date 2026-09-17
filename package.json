@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
+    "postbuild": "node scripts/patch-android.cjs",
+    "capacitor:sync:after": "node scripts/patch-android.cjs",
+    "patch:android": "node scripts/patch-android.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"

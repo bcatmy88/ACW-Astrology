@@ -1,0 +1,6 @@
+{
+  "appId": "com.app.acwdestiny",
+  "appName": "阿赞旺 命理系统",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
