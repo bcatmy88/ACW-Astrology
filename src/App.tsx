@@ -37,7 +37,8 @@ import {
   ClipboardList,
   BookOpen,
   CalendarDays,
-  Database
+  Database,
+  Bell
 } from 'lucide-react';
 import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
@@ -48,6 +49,7 @@ import NotesView from './components/NotesView';
 import BackupView from './components/BackupView';
 import AppointmentsView from './components/AppointmentsView';
 import LanguageToggle from './components/LanguageToggle';
+import NotificationModal from './components/NotificationModal';
 
 // --- Types ---
 interface BaziData {
@@ -371,6 +373,22 @@ export default function App() {
   const [mainUserId, setMainUserId] = useState<string | null>(null);
   const [currentAnalysisClientId, setCurrentAnalysisClientId] = useState<string | null>(null);
   const [showMainUserPicker, setShowMainUserPicker] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
+
+  // Today's unfinished appointments + cases
+  const todayUnfinishedCount = useMemo(() => {
+    const apts = appointments.filter(a => a.status === 'Pending' && a.date === todayStr).length;
+    const cs = cases.filter(c => (c.status === 'Reviewing' || c.status === 'Executing') && c.targetDate === todayStr).length;
+    return apts + cs;
+  }, [appointments, cases, todayStr]);
 
   const [lang, setLangState] = useState<AppLanguage>(() => {
     const savedLang = localStorage.getItem('archan_wang_lang');
@@ -889,7 +907,7 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 pb-20 px-4 sm:px-8">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 px-4 sm:px-8 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
       <div className="max-w-[800px] mx-auto flex flex-col gap-4">
         
         {/* SIDEBAR NAVIGATION */}
@@ -908,17 +926,21 @@ export default function App() {
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed top-0 left-0 bottom-0 w-[280px] bg-zinc-950 border-r border-zinc-900 z-[101] shadow-2xl p-6 flex flex-col gap-8"
+                className="fixed top-0 left-0 bottom-0 w-[280px] bg-zinc-950 border-r border-zinc-900 z-[101] shadow-2xl p-6 flex flex-col gap-6"
+                style={{ paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))', paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <h1 className="text-base font-bold text-white tracking-wide leading-none">
                       {lang === 'zh' ? '阿赞旺命理' : 'ACW Destiny'}
                     </h1>
-                    <span className="text-[9px] text-gold font-bold tracking-[0.2em] uppercase mt-1">ACW Destiny System</span>
+                    <span className="text-[10px] text-gold font-bold tracking-[0.2em] uppercase mt-1">ACW Destiny System</span>
                   </div>
-                  <button onClick={() => setIsSideMenuOpen(false)} className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-white transition-colors">
-                    <ChevronLeft className="w-4 h-4" />
+                  <button 
+                    onClick={() => setIsSideMenuOpen(false)} 
+                    className="w-9 h-9 flex items-center justify-center hover:bg-zinc-900 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer active:scale-95"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -929,24 +951,24 @@ export default function App() {
                   <LanguageToggle lang={lang} onToggle={handleSetLang} />
                 </div>
                 
-                <nav className="flex flex-col gap-1.5">
+                <nav className="flex flex-col gap-2">
                   <button 
                     onClick={() => {
                       setView('list');
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
-                      view === 'list' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center justify-between p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'list' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Home className="w-4 h-4" />
+                    <div className="flex items-center gap-3">
+                      <Home className="w-5 h-5" />
                       <span>{lang === 'zh' ? '档案' : 'Archives'}</span>
                     </div>
                     {savedClients.length > 0 && (
                       <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        "text-xs font-bold px-2 py-0.5 rounded-full",
                         view === 'list' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
                       )}>
                         {savedClients.length}
@@ -960,17 +982,17 @@ export default function App() {
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
-                      view === 'appointments' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center justify-between p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'appointments' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <CalendarDays className="w-4 h-4" />
+                    <div className="flex items-center gap-3">
+                      <CalendarDays className="w-5 h-5" />
                       <span>{lang === 'zh' ? '预约' : 'Appointments'}</span>
                     </div>
                     {appointments.length > 0 && (
                       <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        "text-xs font-bold px-2 py-0.5 rounded-full",
                         view === 'appointments' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
                       )}>
                         {appointments.length}
@@ -984,17 +1006,17 @@ export default function App() {
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
-                      view === 'cases' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center justify-between p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'cases' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <ClipboardList className="w-4 h-4" />
+                    <div className="flex items-center gap-3">
+                      <ClipboardList className="w-5 h-5" />
                       <span>{lang === 'zh' ? '个案' : 'Cases'}</span>
                     </div>
                     {cases.length > 0 && (
                       <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        "text-xs font-bold px-2 py-0.5 rounded-full",
                         view === 'cases' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
                       )}>
                         {cases.length}
@@ -1008,17 +1030,17 @@ export default function App() {
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center justify-between p-3 rounded-xl transition-all font-semibold text-xs",
-                      view === 'notes' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center justify-between p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'notes' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <BookOpen className="w-4 h-4" />
+                    <div className="flex items-center gap-3">
+                      <BookOpen className="w-5 h-5" />
                       <span>{lang === 'zh' ? '笔记' : 'Notes'}</span>
                     </div>
                     {notes.length > 0 && (
                       <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        "text-xs font-bold px-2 py-0.5 rounded-full",
                         view === 'notes' ? "bg-zinc-950/20 text-zinc-950" : "bg-zinc-900 text-gold border border-gold/30"
                       )}>
                         {notes.length}
@@ -1032,12 +1054,31 @@ export default function App() {
                       setIsSideMenuOpen(false);
                     }}
                     className={cn(
-                      "flex items-center gap-2.5 p-3 rounded-xl transition-all font-semibold text-xs",
-                      view === 'backup' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+                      "flex items-center gap-3 p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'backup' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
                     )}
                   >
-                    <Database className="w-4 h-4" />
+                    <Database className="w-5 h-5" />
                     <span>{lang === 'zh' ? '备份' : 'Backup'}</span>
+                  </button>
+
+                  {/* 待办提醒 placed at the very bottom of the sidebar menu */}
+                  <button 
+                    onClick={() => {
+                      setIsSideMenuOpen(false);
+                      setIsNotificationOpen(true);
+                    }}
+                    className="flex items-center justify-between p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] text-amber-300 hover:bg-amber-500/10 hover:text-amber-200 border border-amber-500/30 hover:border-amber-500/50 mt-2 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Bell className="w-5 h-5 text-gold" />
+                      <span>{lang === 'zh' ? '待办提醒' : 'Notifications'}</span>
+                    </div>
+                    {todayUnfinishedCount > 0 && (
+                      <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 border border-amber-400 shadow-sm animate-pulse">
+                        {todayUnfinishedCount}
+                      </span>
+                    )}
                   </button>
                 </nav>
 
@@ -1059,21 +1100,39 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <button 
                   onClick={() => setIsSideMenuOpen(true)}
-                  className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer active:scale-95 shrink-0"
+                  title="菜单 (Menu)"
                 >
-                  <Menu className="w-4 h-4" />
+                  <Menu className="w-5 h-5" />
                 </button>
                 <div className="flex items-center gap-2">
-                  <h1 className="text-sm sm:text-base font-bold text-white tracking-wide leading-none">
+                  <h1 className="text-base sm:text-lg font-bold text-white tracking-wide leading-none">
                     {lang === 'zh' ? '阿赞旺命理' : 'ACW Destiny'}
                   </h1>
-                  <span className="text-[10px] text-gold font-bold px-1.5 py-0.5 rounded bg-gold/10 border border-gold/30">
+                  <span className="text-xs text-gold font-bold px-2 py-0.5 rounded-full bg-gold/15 border border-gold/30">
                     {savedClients.length}
                   </span>
                 </div>
               </div>
 
-              <LanguageToggle lang={lang} onToggle={handleSetLang} />
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                {/* Bell Icon Notification Button: Larger, Gold & Eye-catching for Archives only */}
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationOpen(true)}
+                  className="relative w-10 h-10 rounded-xl bg-gradient-to-b from-amber-500/20 to-yellow-600/10 hover:from-amber-500/30 hover:to-yellow-500/20 border border-gold/60 hover:border-gold text-gold hover:text-yellow-300 transition-all active:scale-95 shrink-0 flex items-center justify-center cursor-pointer shadow-[0_0_12px_rgba(234,179,8,0.22)] group"
+                  title={lang === 'zh' ? `待办提醒（今日 ${todayUnfinishedCount} 项待办）` : `Notifications (${todayUnfinishedCount} pending)`}
+                >
+                  <Bell className="w-5 h-5 text-gold group-hover:scale-110 transition-transform" />
+                  {todayUnfinishedCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-amber-400 text-zinc-950 text-[10px] font-black rounded-full flex items-center justify-center border-2 border-zinc-950 shadow-md animate-pulse">
+                      {todayUnfinishedCount}
+                    </span>
+                  )}
+                </button>
+
+                <LanguageToggle lang={lang} onToggle={handleSetLang} />
+              </div>
             </header>
 
             {/* MAIN USER DASHBOARD */}
@@ -1171,38 +1230,38 @@ export default function App() {
 
               return (
                 <div className="flex flex-col items-center">
-                  <div className="w-full max-w-[340px] bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 p-3 rounded-2xl shadow-xl flex flex-col gap-3 relative overflow-hidden group">
+                  <div className="w-full max-w-[440px] bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 p-4 rounded-2xl shadow-xl flex flex-col gap-3.5 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-2 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
                     <Sparkles className="w-16 h-16 text-gold" />
                   </div>
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center border border-gold/20">
+                      <div className="w-11 h-11 rounded-full bg-gold/10 flex items-center justify-center border border-gold/20">
                         <User className="w-5 h-5 text-gold" />
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                           <h2 className="text-sm font-bold text-white tracking-tight">{mainUser.name}</h2>
-                           <Crown className="w-3 h-3 text-gold" />
+                           <h2 className="text-base font-bold text-white tracking-tight">{mainUser.name}</h2>
+                           <Crown className="w-4 h-4 text-gold" />
                         </div>
-                        <p className="text-[10px] font-medium text-zinc-500">{mainUser.birthDate}</p>
+                        <p className="text-xs font-medium text-zinc-400">{mainUser.birthDate}</p>
                       </div>
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex items-center gap-1.5">
                       <button 
                         onClick={() => setMainUserId(null)} 
-                        className="p-1.5 text-zinc-600 hover:text-zinc-400 transition-colors"
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60 transition-colors cursor-pointer"
                         title="取消设置"
                       >
-                        <Settings className="w-3.5 h-3.5" />
+                        <Settings className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
                           loadClient(mainUser);
                         }}
-                        className="px-3 py-1.5 bg-gold/10 hover:bg-gold text-gold hover:text-zinc-950 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                        className="px-3.5 py-2 bg-gold/15 hover:bg-gold text-gold hover:text-zinc-950 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[36px] flex items-center justify-center border border-gold/40 active:scale-95 cursor-pointer"
                       >
                         分析档案
                       </button>
@@ -1210,10 +1269,10 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                    {/* Bazi Preview - Super Compact */}
-                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-3 rounded-xl flex flex-col gap-2">
-                       <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
-                         <LayoutGrid className="w-3.5 h-3.5" /> 本命
+                    {/* Bazi Preview */}
+                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2.5 sm:p-3 rounded-xl flex flex-col gap-2">
+                       <span className="text-xs font-black text-white uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap">
+                         <LayoutGrid className="w-3.5 h-3.5 text-gold" /> 本命
                        </span>
                        <div className="grid grid-cols-4 items-center">
                          {mBazi.map((pair, i) => {
@@ -1224,17 +1283,17 @@ export default function App() {
                                  <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
                                  <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
                                </div>
-                               <span className="text-[8px] text-white/40 font-bold">{labels[i]}</span>
+                               <span className="text-[10px] text-zinc-400 font-bold">{labels[i]}</span>
                              </div>
                            );
                          })}
                        </div>
                     </div>
 
-                    {/* Current Energy - Super Compact */}
-                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-3 rounded-xl flex flex-col gap-2">
-                       <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
-                         <Zap className="w-3.5 h-3.5" /> 流日
+                    {/* Current Energy */}
+                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2.5 sm:p-3 rounded-xl flex flex-col gap-2">
+                       <span className="text-xs font-black text-white uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap">
+                         <Zap className="w-3.5 h-3.5 text-gold" /> 流日
                        </span>
                        <div className="grid grid-cols-3 items-center">
                          {currentBazi.map((item: any, i: number) => (
@@ -1243,41 +1302,41 @@ export default function App() {
                                <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(item.bazi[0]))}>{item.bazi[0]}</span>
                                <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(item.bazi[1]))}>{item.bazi[1]}</span>
                              </div>
-                             <span className="text-[8px] text-white/40 font-bold">{item.label}</span>
+                             <span className="text-[10px] text-zinc-400 font-bold">{item.label}</span>
                            </div>
                          ))}
                        </div>
                     </div>
 
-                    {/* Numerology Daily - Super Compact */}
-                    <div className="bg-zinc-950/30 border border-zinc-800/40 p-3 rounded-xl flex flex-col gap-2">
-                       <span className="text-[11px] font-black text-white uppercase tracking-tighter flex items-center gap-1.5 whitespace-nowrap">
-                         <Hash className="w-3.5 h-3.5" /> 数字
+                    {/* Numerology Daily */}
+                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2.5 sm:p-3 rounded-xl flex flex-col gap-2">
+                       <span className="text-xs font-black text-white uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap">
+                         <Hash className="w-3.5 h-3.5 text-gold" /> 数字
                        </span>
                         <div className="grid grid-cols-4 items-center">
                           <div className="flex flex-col items-center">
-                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
+                            <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{coreNumber}</span>
                             </div>
-                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">核心</span>
+                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">核心</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
+                            <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numYear}</span>
                             </div>
-                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流年</span>
+                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">流年</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
+                            <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numMonth}</span>
                             </div>
-                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流月</span>
+                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">流月</span>
                           </div>
                           <div className="flex flex-col items-center">
-                            <div className="h-[36px] sm:h-[40px] flex items-center justify-center mb-1 leading-none text-center">
+                            <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numDay}</span>
                             </div>
-                            <span className="text-[8px] text-white/40 font-bold whitespace-nowrap">流日</span>
+                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">流日</span>
                           </div>
                         </div>
                     </div>
@@ -1288,62 +1347,62 @@ export default function App() {
           })()}
 
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400 pointer-events-none" />
               <input 
                 type="text"
                 placeholder="搜索姓名或电话..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-10 pr-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all shadow-inner"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-11 pr-4 py-3.5 text-base text-white placeholder:text-zinc-500 focus:border-gold focus:ring-0 transition-all shadow-inner"
               />
             </div>
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between px-1">
-                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">档案列表 ({filteredClients.length})</span>
+                <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">档案列表 ({filteredClients.length})</span>
               </div>
               
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-2.5">
                 {filteredClients.map((client) => (
                   <div 
                     key={client.id}
-                    className="group bg-zinc-900/50 border border-zinc-800 hover:border-zinc-700 p-3 rounded-lg flex items-center justify-between transition-all"
+                    className="group bg-zinc-900/60 border border-zinc-800 hover:border-zinc-700 p-3.5 sm:p-4 rounded-xl flex items-center justify-between gap-2 transition-all shadow-sm"
                   >
                     <button 
                       onClick={() => loadClient(client)}
-                      className="flex items-center gap-4 flex-1 text-left active:scale-[0.98] transition-transform"
+                      className="flex items-center gap-3.5 flex-1 min-w-0 text-left active:scale-[0.98] transition-transform cursor-pointer"
                     >
-                      <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-gold transition-colors">
+                      <div className="w-11 h-11 rounded-full bg-zinc-800/90 border border-zinc-700/50 flex items-center justify-center text-zinc-400 group-hover:text-gold transition-colors shrink-0">
                         <User className="w-5 h-5" />
                       </div>
-                      <div className="flex flex-col items-start">
-                        <span className="text-base font-bold text-white mb-1">{client.name}</span>
-                        <div className="flex flex-col gap-1 text-xs font-medium text-zinc-500">
-                          <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-zinc-600" />{client.phone}</span>
-                          <span className="flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5 text-zinc-600" />{client.birthDate}</span>
+                      <div className="flex flex-col items-start min-w-0 flex-1">
+                        <span className="text-base font-bold text-white mb-1 leading-snug truncate w-full">{client.name}</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs font-medium text-zinc-400">
+                          <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-zinc-500 shrink-0" />{client.phone}</span>
+                          <span className="flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5 text-zinc-500 shrink-0" />{client.birthDate}</span>
                         </div>
                       </div>
                     </button>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 shrink-0">
                       <button 
                         onClick={(e) => editClient(client, e)}
-                        className="p-3 text-zinc-600 hover:text-gold hover:bg-gold/10 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 opacity-60"
+                        className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-gold hover:bg-zinc-800/80 rounded-xl transition-all active:scale-95 cursor-pointer"
                         title="编辑 (Edit)"
                       >
-                        <Settings className="w-5 h-5" />
+                        <Settings className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={(e) => deleteClient(client.id, e)}
-                        className="p-3 text-zinc-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-md transition-all sm:opacity-0 sm:group-hover:opacity-100 opacity-60"
+                        className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all active:scale-95 cursor-pointer"
                         title="删除 (Delete)"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => loadClient(client)}
-                        className="p-2 text-zinc-700 hover:text-gold active:scale-90 transition-all"
+                        className="w-9 h-9 flex items-center justify-center text-zinc-500 hover:text-gold hover:bg-zinc-800/60 rounded-xl active:scale-90 transition-all cursor-pointer"
                       >
-                        <ChevronRight className="w-4 h-4" />
+                        <ChevronRight className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
@@ -1360,9 +1419,11 @@ export default function App() {
 
             <button 
               onClick={resetForm}
-              className="fixed bottom-10 right-6 w-16 h-16 bg-gold rounded-full shadow-2xl flex items-center justify-center text-white hover:opacity-90 hover:scale-110 active:scale-95 transition-all z-50 border-4 border-zinc-950"
+              className="fixed w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-r from-amber-500 to-gold rounded-full shadow-2xl flex items-center justify-center text-zinc-950 hover:opacity-95 hover:scale-105 active:scale-95 transition-all z-50 border-4 border-zinc-950 cursor-pointer"
+              style={{ bottom: 'max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))', right: 'max(1.5rem, calc(env(safe-area-inset-right, 0px) + 1rem))' }}
+              title="新增客户档案"
             >
-              <Plus className="w-10 h-10" />
+              <Plus className="w-8 h-8 text-zinc-950" />
             </button>
           </div>
         )}
@@ -1377,11 +1438,11 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <button 
                   onClick={() => setView('list')}
-                  className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                  className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer active:scale-95"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-5 h-5" />
                 </button>
-                <h2 className="text-sm sm:text-base font-bold text-white">
+                <h2 className="text-base sm:text-lg font-bold text-white">
                   {editingClientId 
                     ? (lang === 'zh' ? "修改档案" : "Edit Client") 
                     : (lang === 'zh' ? "添加档案" : "New Client")}
@@ -1391,64 +1452,64 @@ export default function App() {
               <LanguageToggle lang={lang} onToggle={handleSetLang} />
             </header>
 
-            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-2xl flex flex-col gap-6 mb-10">
+            <div className="bg-zinc-900 border border-zinc-800 p-5 sm:p-6 rounded-2xl shadow-2xl flex flex-col gap-6 mb-10">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">客户姓名 (Name)*</label>
+                  <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">客户姓名 (Name)*</label>
                   <input 
                     type="text" 
                     placeholder="请输入姓名"
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
-                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all font-bold"
+                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold"
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">联系电话 (Phone)*</label>
+                  <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">联系电话 (Phone)*</label>
                   <input 
                     type="tel" 
                     placeholder="请输入电话号码"
                     value={clientPhone}
                     onChange={(e) => setClientPhone(e.target.value)}
-                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all font-bold"
+                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold"
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">出生日期 (Date)*</label>
+                  <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">出生日期 (Date)*</label>
                   <input 
                     type="date" 
                     value={birthDate} 
                     onChange={(e) => setBirthDate(e.target.value)} 
-                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
+                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
                   />
                 </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
-                      <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">时间 (Time)</label>
+                      <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">时间 (Time)</label>
                       <input 
                         type="time" 
                         value={birthTime} 
                         onChange={(e) => setBirthTime(e.target.value)} 
-                        className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
+                        className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                       <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">时区 (Timezone)</label>
+                       <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">时区 (Timezone)</label>
                        <input 
                          type="number" 
                          value={timezone} 
                          onChange={(e) => setTimezone(Number(e.target.value))} 
                          placeholder="+8"
-                         className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all font-bold" 
+                         className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold" 
                        />
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">性别 (Gender)</label>
+                    <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">性别 (Gender)</label>
                     <select 
                       value={gender} 
                       onChange={(e) => setGender(Number(e.target.value))} 
-                      className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold"
+                      className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-zinc-200 focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold"
                     >
                       <option value={1}>乾造 (男)</option>
                       <option value={0}>坤造 (女)</option>
@@ -1458,23 +1519,23 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">纬度 (Latitude)</label>
+                    <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">纬度 (Latitude)</label>
                     <input 
                       type="number" 
                       step="0.0001"
                       value={latitude} 
                       onChange={(e) => setLatitude(Number(e.target.value))} 
-                      className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all font-bold" 
+                      className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold" 
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-black text-zinc-500 ml-1 uppercase tracking-widest">经度 (Longitude)</label>
+                    <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">经度 (Longitude)</label>
                     <input 
                       type="number" 
                       step="0.0001"
                       value={longitude} 
                       onChange={(e) => setLongitude(Number(e.target.value))} 
-                      className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white focus:border-gold focus:ring-0 transition-all font-bold"
+                      className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold"
                     />
                   </div>
                 </div>
@@ -1483,8 +1544,8 @@ export default function App() {
                   onClick={handleSaveAndAnalyze}
                   disabled={isSaving}
                   className={cn(
-                    "w-full py-4 rounded-xl text-sm font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3",
-                    isSaving ? "bg-zinc-800 text-zinc-600" : "bg-gold text-white hover:opacity-90"
+                    "w-full py-4 min-h-[50px] rounded-xl text-base font-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 cursor-pointer",
+                    isSaving ? "bg-zinc-800 text-zinc-600" : "bg-gold text-zinc-950 hover:opacity-90"
                   )}
                 >
                   <Save className="w-5 h-5" />
@@ -1506,26 +1567,26 @@ export default function App() {
                   setCurrentAnalysisClientId(null);
                   setView('list');
                 }}
-                className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
+                className="h-10 px-3.5 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center gap-2 text-sm font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer active:scale-95"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-5 h-5" />
                 <span>{lang === 'zh' ? '返回列表' : 'Back'}</span>
               </button>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg">
-                  <User className="w-3.5 h-3.5 text-gold" />
-                  <span className="text-xs font-black text-white">{clientName}</span>
-                  <span className="text-xs text-zinc-500 font-bold">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
+                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3.5 py-2 rounded-xl">
+                  <User className="w-4 h-4 text-gold" />
+                  <span className="text-sm font-black text-white">{clientName}</span>
+                  <span className="text-xs text-zinc-400 font-bold">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
                   {currentAnalysisClientId && (
                     <button 
                       onClick={() => setAsMainUser(currentAnalysisClientId)}
                       className={cn(
-                        "ml-1 p-0.5 rounded transition-all",
-                        mainUserId === currentAnalysisClientId ? "text-gold" : "text-zinc-600 hover:text-gold"
+                        "ml-1 p-1 rounded-lg transition-all cursor-pointer",
+                        mainUserId === currentAnalysisClientId ? "text-gold" : "text-zinc-500 hover:text-gold"
                       )}
                       title={lang === 'zh' ? "设为本人" : "Set Main User"}
                     >
-                      <Crown className="w-3.5 h-3.5" />
+                      <Crown className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -1535,65 +1596,65 @@ export default function App() {
             </header>
 
             {/* Summary Information Table */}
-            <div className="grid grid-cols-2 gap-2 bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl shadow-lg">
+            <div className="grid grid-cols-2 gap-2.5 bg-zinc-900/60 border border-zinc-800 p-4 sm:p-5 rounded-2xl shadow-lg">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">姓名 (Name)</span>
-                <span className="text-base font-bold text-white">{clientName}</span>
+                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">姓名 (Name)</span>
+                <span className="text-base sm:text-lg font-bold text-white">{clientName}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">岁数 (Age)</span>
-                <span className="text-base font-bold text-gold">{calculateWesternAge(birthDate)} 岁</span>
+                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">岁数 (Age)</span>
+                <span className="text-base sm:text-lg font-bold text-gold">{calculateWesternAge(birthDate)} 岁</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">生日日期 (阳历 Solar)</span>
-                <span className="text-sm font-bold text-zinc-300">{solar.toYmd()} {birthTime}</span>
+                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">生日日期 (阳历 Solar)</span>
+                <span className="text-sm font-bold text-zinc-200">{solar.toYmd()} {birthTime}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-zinc-500 font-black uppercase tracking-widest">生日日期 (农历 Lunar)</span>
-                <span className="text-sm font-bold text-zinc-300">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
+                <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">生日日期 (农历 Lunar)</span>
+                <span className="text-sm font-bold text-zinc-200">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
               </div>
             </div>
 
             {/* TAB NAVIGATION */}
-            <div className="grid grid-cols-2 gap-2 bg-zinc-900 border border-zinc-800 rounded-lg p-1 shadow-inner">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 shadow-inner">
               <button 
                 onClick={() => setActiveTab('bazi')}
                 className={cn(
-                  "py-2.5 text-xs font-black rounded-md transition-all flex items-center justify-center gap-2",
-                  activeTab === 'bazi' ? "bg-gold text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                  "min-h-[44px] py-2.5 text-xs sm:text-sm font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'bazi' ? "bg-gold text-zinc-950 shadow-lg" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
                 )}
               >
-                <Zap className="w-3.5 h-3.5" />
+                <Zap className="w-4 h-4" />
                 八字
               </button>
               <button 
                 onClick={() => setActiveTab('numerology')}
                 className={cn(
-                  "py-2.5 text-xs font-black rounded-md transition-all flex items-center justify-center gap-2",
-                  activeTab === 'numerology' ? "bg-gold text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                  "min-h-[44px] py-2.5 text-xs sm:text-sm font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'numerology' ? "bg-gold text-zinc-950 shadow-lg" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
                 )}
               >
-                <Hash className="w-3.5 h-3.5" />
+                <Hash className="w-4 h-4" />
                 数字学
               </button>
               <button 
                 onClick={() => setActiveTab('western')}
                 className={cn(
-                  "py-2.5 text-xs font-black rounded-md transition-all flex items-center justify-center gap-2",
-                  activeTab === 'western' ? "bg-gold text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                  "min-h-[44px] py-2.5 text-xs sm:text-sm font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'western' ? "bg-gold text-zinc-950 shadow-lg" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
                 )}
               >
-                <Star className="w-3.5 h-3.5" />
+                <Star className="w-4 h-4" />
                 占星
               </button>
               <button 
                 onClick={() => setActiveTab('houses')}
                 className={cn(
-                  "py-2.5 text-xs font-black rounded-md transition-all flex items-center justify-center gap-2",
-                  activeTab === 'houses' ? "bg-gold text-white shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+                  "min-h-[44px] py-2.5 text-xs sm:text-sm font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'houses' ? "bg-gold text-zinc-950 shadow-lg" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
                 )}
               >
-                <LayoutGrid className="w-3.5 h-3.5" />
+                <LayoutGrid className="w-4 h-4" />
                 十二命宫
               </button>
             </div>
@@ -2651,6 +2712,9 @@ export default function App() {
           onInspectClientBazi={(client) => loadClient(client)}
           lang={lang}
           onToggleLang={handleSetLang}
+          cases={cases}
+          onSaveCase={handleSaveCase}
+          onNavigateToCases={() => setView('cases')}
         />
       )}
 
@@ -2665,6 +2729,9 @@ export default function App() {
           onInspectClientBazi={(client) => loadClient(client)}
           lang={lang}
           onToggleLang={handleSetLang}
+          appointments={appointments}
+          onSaveAppointment={handleSaveAppointment}
+          onNavigateToAppointments={(date) => setView('appointments')}
         />
       )}
 
@@ -2695,6 +2762,24 @@ export default function App() {
           onToggleLang={handleSetLang}
         />
       )}
+
+      {/* GLOBAL NOTIFICATION MODAL */}
+      <NotificationModal
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        initialDate={todayStr}
+        appointments={appointments}
+        cases={cases}
+        savedClients={savedClients}
+        onSaveAppointment={handleSaveAppointment}
+        onSaveCase={handleSaveCase}
+        onNavigateToAppointments={(date) => {
+          setView('appointments');
+        }}
+        onNavigateToCases={() => setView('cases')}
+        onInspectClientBazi={(client) => loadClient(client)}
+        lang={lang}
+      />
     </div>
   );
 }

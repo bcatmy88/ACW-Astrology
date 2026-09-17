@@ -24,7 +24,7 @@ import {
   UserPlus,
   UserCheck
 } from 'lucide-react';
-import type { AppointmentItem, AppointmentStatus, SavedClient, AppLanguage } from '../types';
+import type { AppointmentItem, AppointmentStatus, SavedClient, AppLanguage, CaseItem } from '../types';
 import LanguageToggle from './LanguageToggle';
 
 interface AppointmentsViewProps {
@@ -36,6 +36,9 @@ interface AppointmentsViewProps {
   onInspectClientBazi?: (client: SavedClient) => void;
   lang?: AppLanguage;
   onToggleLang?: (lang: AppLanguage) => void;
+  cases?: CaseItem[];
+  onSaveCase?: (caseItem: CaseItem) => void;
+  onNavigateToCases?: () => void;
 }
 
 const PRESET_SERVICES = [
@@ -82,7 +85,10 @@ export default function AppointmentsView({
   onOpenMenu,
   onInspectClientBazi,
   lang = 'zh',
-  onToggleLang
+  onToggleLang,
+  cases = [],
+  onSaveCase,
+  onNavigateToCases
 }: AppointmentsViewProps) {
   const todayStr = useMemo(() => getTodayString(), []);
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
@@ -349,49 +355,49 @@ export default function AppointmentsView({
     <div className="flex flex-col gap-4 relative">
       {/* HEADER BAR */}
       <header 
-        className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-3.5 sm:px-8 pt-12 sm:pt-12 pb-3 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-2 mb-2 shadow-lg"
+        className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-12 sm:pt-12 pb-3 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-2 mb-2 shadow-lg"
         style={{ paddingTop: 'max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
       >
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button 
             type="button"
             onClick={onOpenMenu}
-            className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white shrink-0"
+            className="w-10 h-10 rounded-xl flex items-center justify-center bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors text-zinc-300 hover:text-white cursor-pointer active:scale-95 shrink-0"
             title="Menu"
           >
             <Menu className="w-5 h-5" />
           </button>
           
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            <h1 className="text-sm sm:text-base font-bold text-white tracking-wide truncate">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-base sm:text-lg font-bold text-white tracking-wide truncate">
               {lang === 'zh' ? '预约排期' : 'Appointments'}
             </h1>
-            <span className="text-[10px] sm:text-xs bg-gold/20 text-gold border border-gold/40 px-1.5 sm:px-2 py-0.5 rounded-full font-bold shrink-0">
+            <span className="text-xs bg-gold/20 text-gold border border-gold/40 px-2 py-0.5 rounded-full font-bold shrink-0">
               {appointments.length}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {onToggleLang && <LanguageToggle lang={lang} onToggle={onToggleLang} className="shrink-0" />}
           <button
             type="button"
             onClick={() => handleOpenCreateModal()}
-            className="flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-yellow-600 to-gold text-zinc-950 hover:brightness-110 px-2.5 sm:px-3 py-1.5 rounded-xl font-bold text-[11px] sm:text-xs transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0"
+            className="min-h-[40px] flex items-center gap-1.5 bg-gradient-to-r from-yellow-600 to-gold text-zinc-950 hover:brightness-110 px-3.5 py-2 rounded-xl font-black text-xs sm:text-sm transition-all shadow-md active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span className="whitespace-nowrap">{lang === 'zh' ? '新建预约' : 'New Booking'}</span>
           </button>
         </div>
       </header>
 
       {/* 1. INTERACTIVE CALENDAR CONTAINER */}
-      <section className="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+      <section className="bg-zinc-900/90 border border-zinc-800/90 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col gap-3.5">
         {/* Calendar Month & Navigation */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-gold" />
-            <h2 className="text-sm sm:text-base font-bold text-zinc-100">
+            <CalendarDays className="w-5 h-5 text-gold" />
+            <h2 className="text-base sm:text-lg font-bold text-zinc-100">
               {currentCalYear}{lang === 'zh' ? '年 ' : ' / '}{currentCalMonth + 1}{lang === 'zh' ? '月' : ''}
             </h2>
           </div>
@@ -400,33 +406,33 @@ export default function AppointmentsView({
             <button
               type="button"
               onClick={handleJumpToToday}
-              className="text-[11px] font-semibold text-zinc-400 hover:text-gold border border-zinc-800 hover:border-gold/40 px-2 py-1 rounded-lg transition-all"
+              className="h-8 px-2.5 text-xs font-bold text-zinc-300 hover:text-gold border border-zinc-800 hover:border-gold/40 bg-zinc-950/60 rounded-lg transition-all cursor-pointer flex items-center justify-center"
             >
               {lang === 'zh' ? '今天' : 'Today'}
             </button>
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="p-1 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition-colors"
+              className="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer"
               title="Previous Month"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               type="button"
               onClick={handleNextMonth}
-              className="p-1 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition-colors"
+              className="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer"
               title="Next Month"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
         </div>
 
         {/* Weekday Row */}
-        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-zinc-500 pb-1 border-b border-zinc-800/60">
+        <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-zinc-400 pb-1.5 border-b border-zinc-800/60">
           {weekdays.map((w, idx) => (
-            <div key={idx} className={idx === 0 || idx === 6 ? 'text-amber-600/80' : ''}>
+            <div key={idx} className={idx === 0 || idx === 6 ? 'text-amber-500' : ''}>
               {w}
             </div>
           ))}
@@ -449,18 +455,18 @@ export default function AppointmentsView({
                   setSelectedDate(cell.dateStr);
                   setActiveTab('selected');
                 }}
-                className={`min-h-[46px] sm:min-h-[52px] rounded-xl p-1 flex flex-col items-center justify-between transition-all relative border ${
+                className={`min-h-[50px] sm:min-h-[56px] rounded-xl p-1 sm:p-1.5 flex flex-col items-center justify-between transition-all relative border cursor-pointer ${
                   isSelected 
-                    ? 'bg-gold/15 border-gold shadow-[0_0_12px_rgba(212,175,55,0.25)]' 
+                    ? 'bg-gold/20 border-gold shadow-[0_0_14px_rgba(212,175,55,0.3)]' 
                     : isToday 
-                    ? 'bg-zinc-800/90 border-zinc-600 hover:border-gold/50' 
+                    ? 'bg-zinc-800 border-zinc-600 hover:border-gold/50' 
                     : cell.isCurrentMonth
-                    ? 'bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-800/50 hover:border-zinc-700'
+                    ? 'bg-zinc-950/70 border-zinc-800/90 hover:bg-zinc-800/50 hover:border-zinc-700'
                     : 'bg-zinc-950/20 border-transparent opacity-40 hover:opacity-70'
                 }`}
               >
                 {/* Day Number */}
-                <span className={`text-xs font-bold leading-none mt-0.5 ${
+                <span className={`text-xs sm:text-sm font-bold leading-none mt-0.5 ${
                   isSelected 
                     ? 'text-gold' 
                     : isToday 
@@ -475,7 +481,7 @@ export default function AppointmentsView({
                 {/* Appointment indicator tag / dot */}
                 {aptCount > 0 ? (
                   <div className="flex items-center gap-0.5 mb-0.5">
-                    <span className={`text-[9px] font-black px-1 rounded-full leading-tight ${
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full leading-tight ${
                       hasPending 
                         ? 'bg-gold text-zinc-950' 
                         : 'bg-emerald-600 text-white'
@@ -492,18 +498,18 @@ export default function AppointmentsView({
         </div>
 
         {/* Selected Date Summary & Quick Add */}
-        <div className="pt-2 border-t border-zinc-800/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="pt-2.5 border-t border-zinc-800/70 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
           <div className="flex items-center gap-2">
-            <span className="text-zinc-400">
+            <span className="text-zinc-300">
               {lang === 'zh' ? '已选日期：' : 'Selected: '}
-              <strong className="text-zinc-100 font-bold ml-1">{selectedDate}</strong>
+              <strong className="text-white font-bold ml-1">{selectedDate}</strong>
             </span>
             {selectedDate === todayStr && (
-              <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full font-bold">
                 {lang === 'zh' ? '今天' : 'Today'}
               </span>
             )}
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-xs text-zinc-400">
               ({selectedDateAppointmentsCount} {lang === 'zh' ? '个预约' : 'bookings'})
             </span>
           </div>
@@ -511,9 +517,9 @@ export default function AppointmentsView({
           <button
             type="button"
             onClick={() => handleOpenCreateModal(selectedDate)}
-            className="flex items-center gap-1 text-gold hover:text-yellow-300 font-bold text-xs hover:underline cursor-pointer whitespace-nowrap shrink-0"
+            className="flex items-center gap-1 text-gold hover:text-yellow-300 font-bold text-xs sm:text-sm hover:underline cursor-pointer whitespace-nowrap shrink-0 py-1"
           >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <Plus className="w-4 h-4 shrink-0" />
             <span>{lang === 'zh' ? `为 ${selectedDate} 预约` : `Book for ${selectedDate}`}</span>
           </button>
         </div>
@@ -526,7 +532,7 @@ export default function AppointmentsView({
           <button
             type="button"
             onClick={() => setActiveTab('selected')}
-            className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all whitespace-nowrap ${
+            className={`min-h-[38px] px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'selected' 
                 ? 'bg-gold text-zinc-950 shadow-sm' 
                 : 'text-zinc-400 hover:text-white'
@@ -538,7 +544,7 @@ export default function AppointmentsView({
           <button
             type="button"
             onClick={() => setActiveTab('pending')}
-            className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all whitespace-nowrap ${
+            className={`min-h-[38px] px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'pending' 
                 ? 'bg-gold text-zinc-950 shadow-sm' 
                 : 'text-zinc-400 hover:text-white'
@@ -550,7 +556,7 @@ export default function AppointmentsView({
           <button
             type="button"
             onClick={() => setActiveTab('all')}
-            className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all whitespace-nowrap ${
+            className={`min-h-[38px] px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'all' 
                 ? 'bg-gold text-zinc-950 shadow-sm' 
                 : 'text-zinc-400 hover:text-white'
@@ -562,7 +568,7 @@ export default function AppointmentsView({
           <button
             type="button"
             onClick={() => setActiveTab('completed')}
-            className={`px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all whitespace-nowrap ${
+            className={`min-h-[38px] px-3 sm:px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'completed' 
                 ? 'bg-gold text-zinc-950 shadow-sm' 
                 : 'text-zinc-400 hover:text-white'
@@ -573,22 +579,22 @@ export default function AppointmentsView({
         </div>
 
         {/* Search input */}
-        <div className="relative flex-1 max-w-full sm:max-w-[240px]">
-          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        <div className="relative flex-1 max-w-full sm:max-w-[260px]">
+          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={lang === 'zh' ? '搜索姓名/电话/项目...' : 'Search appointments...'}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-gold/60"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-9 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-gold/60"
           />
           {searchQuery && (
             <button 
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 cursor-pointer p-1"
             >
-              <X className="w-3 h-3" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -628,29 +634,29 @@ export default function AppointmentsView({
             return (
               <div
                 key={item.id}
-                className="bg-zinc-900/85 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-2xl p-4 flex flex-col gap-3 transition-all shadow-sm"
+                className="bg-zinc-900/85 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5 transition-all shadow-sm"
               >
                 {/* Top Row: Client Info & Status */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-zinc-950 border border-gold/40 flex items-center justify-center text-gold font-black text-xs shrink-0 shadow-inner">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-zinc-950 border border-gold/40 flex items-center justify-center text-gold font-black text-sm shrink-0 shadow-inner">
                       {item.clientName[0] || '客'}
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm sm:text-base font-bold text-zinc-100 truncate">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-base sm:text-lg font-bold text-zinc-100 truncate">
                           {item.clientName}
                         </span>
                         {item.status === 'Pending' ? (
-                          <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold shrink-0">
+                          <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-bold shrink-0">
                             {lang === 'zh' ? '待赴约' : 'Pending'}
                           </span>
                         ) : item.status === 'Completed' ? (
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold shrink-0">
+                          <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-bold shrink-0">
                             {lang === 'zh' ? '已完成' : 'Completed'}
                           </span>
                         ) : (
-                          <span className="text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700 px-2 py-0.5 rounded-full font-bold shrink-0">
+                          <span className="text-xs bg-zinc-800 text-zinc-400 border border-zinc-700 px-2.5 py-0.5 rounded-full font-bold shrink-0">
                             {lang === 'zh' ? '已取消' : 'Canceled'}
                           </span>
                         )}
@@ -658,8 +664,8 @@ export default function AppointmentsView({
 
                       {/* Phone / Contact */}
                       {item.clientPhone && (
-                        <div className="flex items-center gap-1 text-xs text-zinc-400 mt-0.5">
-                          <Phone className="w-3 h-3 text-zinc-500" />
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-zinc-400 mt-0.5">
+                          <Phone className="w-3.5 h-3.5 text-zinc-500" />
                           <span>{item.clientPhone}</span>
                         </div>
                       )}
@@ -671,10 +677,10 @@ export default function AppointmentsView({
                     <button
                       type="button"
                       onClick={() => handleOpenEditModal(item)}
-                      className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+                      className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
                       title="Edit"
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
+                      <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
@@ -683,29 +689,29 @@ export default function AppointmentsView({
                           onDeleteAppointment(item.id);
                         }
                       }}
-                      className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                      className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
                       title="Delete"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
                 {/* Date & Time pill row */}
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-semibold border ${
+                <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold border ${
                     isToday 
                       ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-300' 
                       : 'bg-zinc-950 border-zinc-800 text-zinc-300'
                   }`}>
-                    <CalendarDays className="w-3.5 h-3.5 text-gold shrink-0" />
+                    <CalendarDays className="w-4 h-4 text-gold shrink-0" />
                     <span>{item.date}</span>
-                    {isToday && <span className="text-[10px] font-black text-yellow-400 ml-1">({lang === 'zh' ? '今天' : 'Today'})</span>}
+                    {isToday && <span className="text-xs font-black text-yellow-400 ml-1">({lang === 'zh' ? '今天' : 'Today'})</span>}
                   </div>
 
                   {item.time && (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl font-semibold bg-zinc-950 border border-zinc-800 text-zinc-300">
-                      <Clock className="w-3.5 h-3.5 text-gold shrink-0" />
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold bg-zinc-950 border border-zinc-800 text-zinc-300">
+                      <Clock className="w-4 h-4 text-gold shrink-0" />
                       <span>{item.time}</span>
                     </div>
                   )}
@@ -714,9 +720,9 @@ export default function AppointmentsView({
                     <button
                       type="button"
                       onClick={() => onInspectClientBazi(linkedClient)}
-                      className="flex items-center gap-1 text-[11px] text-gold hover:text-yellow-300 bg-gold/10 hover:bg-gold/20 border border-gold/30 px-2 py-0.5 rounded-lg transition-all ml-auto cursor-pointer"
+                      className="min-h-[34px] flex items-center gap-1.5 text-xs text-gold hover:text-yellow-300 bg-gold/10 hover:bg-gold/20 border border-gold/30 px-3 py-1 rounded-xl transition-all ml-auto cursor-pointer"
                     >
-                      <Sparkles className="w-3 h-3" />
+                      <Sparkles className="w-3.5 h-3.5" />
                       <span>{lang === 'zh' ? '查看八字' : 'View Bazi'}</span>
                     </button>
                   )}
@@ -728,9 +734,9 @@ export default function AppointmentsView({
                     {item.services.map((svc, sIdx) => (
                       <span 
                         key={sIdx}
-                        className="bg-gold/10 border border-gold/30 text-gold text-[11px] font-semibold px-2.5 py-0.5 rounded-lg flex items-center gap-1"
+                        className="bg-gold/10 border border-gold/30 text-gold text-xs font-semibold px-3 py-1 rounded-xl flex items-center gap-1.5"
                       >
-                        <Tag className="w-2.5 h-2.5" />
+                        <Tag className="w-3 h-3" />
                         <span>{svc}</span>
                       </span>
                     ))}
@@ -739,9 +745,9 @@ export default function AppointmentsView({
 
                 {/* Detailed Notes / Requirements */}
                 {item.notes && (
-                  <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-2.5 text-xs text-zinc-300 leading-relaxed whitespace-pre-line break-words">
-                    <div className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 mb-1">
-                      <FileText className="w-3 h-3 text-gold" />
+                  <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3 text-xs sm:text-sm text-zinc-300 leading-relaxed whitespace-pre-line break-words">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 mb-1">
+                      <FileText className="w-3.5 h-3.5 text-gold" />
                       <span>{lang === 'zh' ? '具体要求与说明：' : 'Details & Requirements:'}</span>
                     </div>
                     {item.notes}
@@ -749,28 +755,28 @@ export default function AppointmentsView({
                 )}
 
                 {/* Status Toggle Bar */}
-                <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between gap-2 text-xs">
-                  <span className="text-[11px] text-zinc-500 font-medium">
+                <div className="pt-2.5 border-t border-zinc-800/60 flex items-center justify-between gap-2 text-xs sm:text-sm">
+                  <span className="text-xs text-zinc-400 font-medium">
                     {lang === 'zh' ? '预约状态：' : 'Status:'}
                   </span>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     {item.status !== 'Completed' ? (
                       <button
                         type="button"
                         onClick={() => handleQuickStatusChange(item, 'Completed')}
-                        className="flex items-center gap-1 text-[11px] font-bold bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-700/50 px-2.5 py-1 rounded-lg transition-all"
+                        className="min-h-[36px] flex items-center gap-1.5 text-xs sm:text-sm font-bold bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-700/50 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
                       >
-                        <CheckCircle2 className="w-3 h-3" />
+                        <CheckCircle2 className="w-4 h-4" />
                         <span>{lang === 'zh' ? '标记已赴约完成' : 'Mark Completed'}</span>
                       </button>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleQuickStatusChange(item, 'Pending')}
-                        className="flex items-center gap-1 text-[11px] font-semibold text-zinc-400 hover:text-white bg-zinc-800 px-2.5 py-1 rounded-lg transition-all"
+                        className="min-h-[36px] flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer"
                       >
-                        <Clock4 className="w-3 h-3" />
+                        <Clock4 className="w-4 h-4" />
                         <span>{lang === 'zh' ? '改为待赴约' : 'Set to Pending'}</span>
                       </button>
                     )}
@@ -779,7 +785,7 @@ export default function AppointmentsView({
                       <button
                         type="button"
                         onClick={() => handleQuickStatusChange(item, 'Canceled')}
-                        className="text-[11px] text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 px-2 py-1 rounded-lg transition-all"
+                        className="min-h-[36px] text-xs sm:text-sm text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
                       >
                         {lang === 'zh' ? '取消' : 'Cancel'}
                       </button>
@@ -828,7 +834,7 @@ export default function AppointmentsView({
               <button 
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                className="w-10 h-10 flex items-center justify-center hover:bg-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -836,36 +842,36 @@ export default function AppointmentsView({
 
             {/* Modal Form */}
             <form onSubmit={handleSaveForm} className="flex flex-col">
-              <div className="p-5 sm:p-6 flex flex-col gap-4 overflow-y-auto max-h-[calc(90vh-140px)]">
+              <div className="p-5 sm:p-6 flex flex-col gap-4 overflow-y-auto max-h-[calc(85vh-120px)]">
                 {/* 1. 客户基本资料 */}
-                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-4.5 flex flex-col gap-3.5">
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-300">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-black uppercase tracking-wider text-zinc-300">
                       <User className="w-4 h-4 text-gold" />
                       <span>{lang === 'zh' ? '客户基本资料' : 'Client Profile'}</span>
                     </div>
                     {savedClients.length > 0 && (
-                      <span className="text-[11px] text-zinc-400 font-medium">
+                      <span className="text-xs text-zinc-400 font-medium">
                         {lang === 'zh' ? `档案库共有 ${savedClients.length} 位客户` : `${savedClients.length} archived clients`}
                       </span>
                     )}
                   </div>
 
                   {/* 模式选择：选择原有客户 VS 手动填写客户 */}
-                  <div className="grid grid-cols-2 gap-1.5 sm:gap-2 p-1 bg-black/70 border border-zinc-800 rounded-xl">
+                  <div className="grid grid-cols-2 gap-2 p-1.5 bg-black/70 border border-zinc-800 rounded-xl">
                     <button
                       type="button"
                       onClick={() => setClientInputMode('archive')}
-                      className={`h-9 px-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap ${
+                      className={`min-h-[42px] px-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
                         clientInputMode === 'archive'
                           ? 'bg-zinc-800 text-gold border border-gold/40 shadow-sm'
                           : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <Contact className="w-3.5 h-3.5 text-gold shrink-0" />
+                      <Contact className="w-4 h-4 text-gold shrink-0" />
                       <span className="truncate">{lang === 'zh' ? '选择原有客户' : 'Existing Client'}</span>
                       {savedClients.length > 0 && (
-                        <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-gold/15 text-gold font-bold shrink-0">
+                        <span className="px-2 py-0.5 text-xs rounded-full bg-gold/15 text-gold font-bold shrink-0">
                           {savedClients.length}
                         </span>
                       )}
@@ -875,23 +881,23 @@ export default function AppointmentsView({
                       onClick={() => {
                         setClientInputMode('manual');
                       }}
-                      className={`h-9 px-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer whitespace-nowrap ${
+                      className={`min-h-[42px] px-2.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
                         clientInputMode === 'manual'
                           ? 'bg-zinc-800 text-gold border border-gold/40 shadow-sm'
                           : 'text-zinc-400 hover:text-white'
                       }`}
                     >
-                      <UserPlus className="w-3.5 h-3.5 text-gold shrink-0" />
+                      <UserPlus className="w-4 h-4 text-gold shrink-0" />
                       <span className="truncate">{lang === 'zh' ? '手动填写客户' : 'Manual Entry'}</span>
                     </button>
                   </div>
 
                   {/* 档案下拉选择区 */}
                   {clientInputMode === 'archive' && (
-                    <div className="flex flex-col gap-2 p-3 bg-black border border-zinc-800 rounded-xl">
+                    <div className="flex flex-col gap-2.5 p-3.5 bg-black border border-zinc-800 rounded-xl">
                       <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
-                          <Search className="w-3 h-3 text-gold" />
+                        <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                          <Search className="w-3.5 h-3.5 text-gold" />
                           <span>{lang === 'zh' ? '选择原有客户：' : 'Select existing client:'}</span>
                         </label>
                         {formClientId && (
@@ -902,7 +908,7 @@ export default function AppointmentsView({
                               setFormClientName('');
                               setFormClientPhone('');
                             }}
-                            className="text-[11px] text-zinc-400 hover:text-rose-400 font-medium transition-colors cursor-pointer"
+                            className="text-xs text-zinc-400 hover:text-rose-400 font-medium transition-colors cursor-pointer py-0.5 px-1.5"
                           >
                             {lang === 'zh' ? '清空重选' : 'Clear'}
                           </button>
@@ -913,7 +919,7 @@ export default function AppointmentsView({
                         <select
                           value={formClientId}
                           onChange={e => handlePickExistingClient(e.target.value)}
-                          className="w-full h-10 bg-zinc-900 border border-zinc-700 rounded-lg px-3 text-xs text-white focus:outline-none focus:border-gold transition-all cursor-pointer font-medium"
+                          className="w-full min-h-[44px] bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 text-sm text-white focus:outline-none focus:border-gold transition-all cursor-pointer font-medium"
                         >
                           <option value="">{lang === 'zh' ? '-- 点击下拉挑选原有客户 --' : '-- Choose existing client --'}</option>
                           {savedClients.map(c => (
@@ -923,14 +929,14 @@ export default function AppointmentsView({
                           ))}
                         </select>
                       ) : (
-                        <div className="py-2 text-center text-xs text-zinc-500">
+                        <div className="py-2.5 text-center text-xs sm:text-sm text-zinc-500">
                           {lang === 'zh' ? '暂无原有客户记录，请点击上方“手动填写客户”。' : 'No existing client records yet. Enter details manually.'}
                         </div>
                       )}
 
                       {formClientId && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium bg-emerald-950/40 border border-emerald-800/50 px-2.5 py-1.5 rounded-lg">
-                          <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium bg-emerald-950/40 border border-emerald-800/50 px-3 py-2 rounded-xl">
+                          <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                           <span>{lang === 'zh' ? `已关联原有客户：${formClientName}，下方资料可随时查看或微调` : `Linked to client: ${formClientName}`}</span>
                         </div>
                       )}
@@ -938,14 +944,14 @@ export default function AppointmentsView({
                   )}
 
                   {/* 客户姓名与电话输入 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center justify-between ml-0.5">
-                        <label className="text-xs font-bold text-zinc-300">
+                        <label className="text-xs sm:text-sm font-bold text-zinc-300">
                           {lang === 'zh' ? '客户姓名 *' : 'Client Name *'}
                         </label>
                         {formClientId && (
-                          <span className="text-[10px] text-gold font-bold">
+                          <span className="text-xs text-gold font-bold">
                             {lang === 'zh' ? '✓ 档案已关联' : '✓ Linked'}
                           </span>
                         )}
@@ -956,12 +962,12 @@ export default function AppointmentsView({
                         value={formClientName}
                         onChange={e => setFormClientName(e.target.value)}
                         placeholder={lang === 'zh' ? '输入客户姓名（如：陈先生）' : 'e.g. John Doe'}
-                        className="h-11 px-3.5 bg-black border border-zinc-800 rounded-xl text-sm text-white font-medium placeholder:text-zinc-600 focus:outline-none focus:border-gold transition-all"
+                        className="min-h-[46px] px-3.5 bg-black border border-zinc-800 rounded-xl text-base text-white font-medium placeholder:text-zinc-600 focus:outline-none focus:border-gold transition-all"
                       />
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-300 ml-0.5">
+                      <label className="text-xs sm:text-sm font-bold text-zinc-300 ml-0.5">
                         {lang === 'zh' ? '联系电话 / WhatsApp (选填)' : 'Phone / WhatsApp'}
                       </label>
                       <input
@@ -969,28 +975,28 @@ export default function AppointmentsView({
                         value={formClientPhone}
                         onChange={e => setFormClientPhone(e.target.value)}
                         placeholder={lang === 'zh' ? '例如：012-345 6789' : 'e.g. +60123456789'}
-                        className="h-11 px-3.5 bg-black border border-zinc-800 rounded-xl text-sm text-white font-medium placeholder:text-zinc-600 focus:outline-none focus:border-gold transition-all"
+                        className="min-h-[46px] px-3.5 bg-black border border-zinc-800 rounded-xl text-base text-white font-medium placeholder:text-zinc-600 focus:outline-none focus:border-gold transition-all"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* 2. 预约日期与时间 */}
-                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-4.5 flex flex-col gap-3.5">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-300">
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-black uppercase tracking-wider text-zinc-300">
                     <CalendarDays className="w-4 h-4 text-gold" />
                     <span>{lang === 'zh' ? '预约日期与时段' : 'Date & Time'}</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {/* Date picker */}
                     <div className="flex flex-col gap-1.5">
                       <div className="flex items-center justify-between ml-0.5">
-                        <label className="text-xs font-bold text-zinc-300">
+                        <label className="text-xs sm:text-sm font-bold text-zinc-300">
                           {lang === 'zh' ? '哪天来 (日期) *' : 'Booking Date *'}
                         </label>
                         {formDate && (
-                          <span className="text-[11px] font-bold text-gold">
+                          <span className="text-xs font-bold text-gold">
                             {getWeekdayLabel(formDate, lang)}
                           </span>
                         )}
@@ -1000,28 +1006,28 @@ export default function AppointmentsView({
                         required
                         value={formDate}
                         onChange={e => setFormDate(e.target.value)}
-                        className="h-11 px-3.5 bg-black border border-zinc-800 rounded-xl text-sm text-white font-medium focus:outline-none focus:border-gold transition-all cursor-pointer [color-scheme:dark]"
+                        className="min-h-[46px] px-3.5 bg-black border border-zinc-800 rounded-xl text-base text-white font-medium focus:outline-none focus:border-gold transition-all cursor-pointer [color-scheme:dark]"
                       />
                     </div>
 
                     {/* Time picker */}
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-300 ml-0.5">
+                      <label className="text-xs sm:text-sm font-bold text-zinc-300 ml-0.5">
                         {lang === 'zh' ? '几点来 (时间)' : 'Booking Time'}
                       </label>
                       <input
                         type="time"
                         value={formTime}
                         onChange={e => setFormTime(e.target.value)}
-                        className="h-11 px-3.5 bg-black border border-zinc-800 rounded-xl text-sm text-white font-medium focus:outline-none focus:border-gold transition-all cursor-pointer [color-scheme:dark]"
+                        className="min-h-[46px] px-3.5 bg-black border border-zinc-800 rounded-xl text-base text-white font-medium focus:outline-none focus:border-gold transition-all cursor-pointer [color-scheme:dark]"
                       />
                     </div>
                   </div>
 
                   {/* Quick time pills below */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-zinc-800/60">
-                    <span className="text-[11px] font-bold text-zinc-500 mr-1 flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-gold" />
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/60">
+                    <span className="text-xs font-bold text-zinc-400 mr-1 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-gold" />
                       <span>{lang === 'zh' ? '常用时段：' : 'Quick time:'}</span>
                     </span>
                     {['10:00', '11:30', '14:00', '15:30', '17:00', '20:00'].map(t => {
@@ -1031,7 +1037,7 @@ export default function AppointmentsView({
                           key={t}
                           type="button"
                           onClick={() => setFormTime(t)}
-                          className={`text-xs px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer border ${
+                          className={`min-h-[34px] text-xs sm:text-sm px-3 py-1 rounded-xl font-bold transition-all cursor-pointer border ${
                             isSelected
                               ? 'bg-gold text-zinc-950 border-gold shadow-sm'
                               : 'bg-black border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
@@ -1045,19 +1051,19 @@ export default function AppointmentsView({
                 </div>
 
                 {/* 3. 咨询项目 */}
-                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-4.5 flex flex-col gap-3.5">
+                <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 flex flex-col gap-3.5">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-zinc-300">
+                    <div className="flex items-center gap-2 text-xs sm:text-sm font-black uppercase tracking-wider text-zinc-300">
                       <Tag className="w-4 h-4 text-gold" />
                       <span>{lang === 'zh' ? '咨询项目' : 'Consultation Services'}</span>
                     </div>
-                    <span className="text-[11px] font-bold text-gold">
+                    <span className="text-xs font-bold text-gold">
                       {lang === 'zh' ? `已选 ${formServices.length} 项` : `${formServices.length} selected`}
                     </span>
                   </div>
 
                   {/* 6 Preset service cards in 3 columns on sm, 2 on mobile */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5">
                     {PRESET_SERVICES.map(svc => {
                       const isSelected = formServices.includes(svc.zh);
                       return (
@@ -1065,13 +1071,13 @@ export default function AppointmentsView({
                           key={svc.id}
                           type="button"
                           onClick={() => toggleService(svc.zh)}
-                          className={`h-11 px-2 rounded-xl text-[11px] sm:text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center leading-tight ${
+                          className={`min-h-[46px] px-2.5 rounded-xl text-xs sm:text-sm font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 text-center leading-tight ${
                             isSelected
                               ? 'bg-gold/15 text-gold border-gold ring-1 ring-gold/40 shadow-sm'
                               : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                           }`}
                         >
-                          {isSelected && <Check className="w-3.5 h-3.5 text-gold shrink-0" />}
+                          {isSelected && <Check className="w-4 h-4 text-gold shrink-0" />}
                           <span className="truncate">{lang === 'zh' ? svc.zh : svc.en}</span>
                         </button>
                       );
@@ -1080,9 +1086,9 @@ export default function AppointmentsView({
 
                   {/* If '其他' is selected, allow user to input the custom consultation item */}
                   {formServices.includes('其他') && (
-                    <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-black border border-gold/40 shadow-inner animate-in fade-in duration-150">
-                      <label className="text-xs font-bold text-gold flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-gold" />
+                    <div className="flex flex-col gap-1.5 p-3.5 rounded-xl bg-black border border-gold/40 shadow-inner animate-in fade-in duration-150">
+                      <label className="text-xs sm:text-sm font-bold text-gold flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-gold" />
                         <span>{lang === 'zh' ? '请填写客户要的项目名称 *' : 'Specify Custom Consultation Item *'}</span>
                       </label>
                       <input
@@ -1090,7 +1096,7 @@ export default function AppointmentsView({
                         value={formCustomService}
                         onChange={e => setFormCustomService(e.target.value)}
                         placeholder={lang === 'zh' ? '输入客户要做的具体项目（例如：化太岁法事、起名择日、安胎祈福等）' : 'e.g. Custom ritual, Naming, Cleansing...'}
-                        className="h-10 px-3.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-gold transition-all"
+                        className="min-h-[44px] px-3.5 bg-zinc-900 border border-zinc-700 rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-gold transition-all"
                         autoFocus
                       />
                     </div>
@@ -1098,8 +1104,8 @@ export default function AppointmentsView({
 
                   {/* Notes */}
                   <div className="flex flex-col gap-1.5 pt-1">
-                    <label className="text-xs font-bold text-zinc-300 ml-0.5 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-gold" />
+                    <label className="text-xs sm:text-sm font-bold text-zinc-300 ml-0.5 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-gold" />
                       <span>{lang === 'zh' ? '具体要求、法事交代与备忘 (选填)' : 'Notes & Instructions (Optional)'}</span>
                     </label>
                     <textarea
@@ -1109,15 +1115,15 @@ export default function AppointmentsView({
                       placeholder={lang === 'zh' 
                         ? '写上客户交代的具体事宜（例如：补财库全套、带两尊佛牌来加持、同行2人、提醒备红烛金纸等）...' 
                         : 'Write down details of what they want to do or any notes...'}
-                      className="bg-black border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-gold focus:outline-none resize-none leading-relaxed transition-all"
+                      className="bg-black border border-zinc-800 rounded-xl p-3.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-gold focus:outline-none resize-none leading-relaxed transition-all"
                     />
                   </div>
                 </div>
 
                 {/* 4. 状态（仅编辑已有预约时显示） */}
                 {editingId && (
-                  <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-3.5 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-300">
+                  <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-zinc-300">
                       {lang === 'zh' ? '当前预约状态：' : 'Booking Status:'}
                     </span>
                     <div className="flex items-center gap-2">
@@ -1126,14 +1132,14 @@ export default function AppointmentsView({
                           key={st}
                           type="button"
                           onClick={() => setFormStatus(st)}
-                          className={`text-xs px-3 py-1.5 rounded-xl font-bold border transition-all cursor-pointer ${
+                          className={`text-xs sm:text-sm px-3.5 py-2 rounded-xl font-bold border transition-all cursor-pointer ${
                             formStatus === st
                               ? st === 'Completed'
                                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-sm'
                                 : st === 'Canceled'
                                 ? 'bg-rose-500/20 text-rose-400 border-rose-500/50 shadow-sm'
                                 : 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-sm'
-                              : 'bg-black border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                              : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200'
                           }`}
                         >
                           {st === 'Pending' ? (lang === 'zh' ? '待赴约' : 'Pending')
@@ -1151,13 +1157,13 @@ export default function AppointmentsView({
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  className="min-h-[44px] px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
                 >
                   {lang === 'zh' ? '取消' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 bg-gold text-zinc-950 hover:brightness-110 rounded-xl text-xs font-black transition-all shadow-lg shadow-gold/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  className="min-h-[44px] px-6 py-2.5 bg-gold text-zinc-950 hover:brightness-110 rounded-xl text-xs sm:text-sm font-black transition-all shadow-lg shadow-gold/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
                 >
                   <Check className="w-4 h-4" />
                   <span>{editingId 

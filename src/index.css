@@ -10,13 +10,46 @@
   --color-app-bg: #0a0a0b;
 }
 
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-app-bg text-[#e4e4e7] font-sans;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Ensure inputs and buttons on mobile don't cause unexpected zoom or cramped text */
+  input, select, textarea, button {
+    touch-action: manipulation;
   }
 }
 
 @layer utilities {
+  /* Safe Area Utility helpers */
+  .pt-safe {
+    padding-top: max(3rem, calc(env(safe-area-inset-top, 0px) + 0.75rem));
+  }
+  .pb-safe {
+    padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  }
+  .pl-safe {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  }
+  .pr-safe {
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
   /* Hide scrollbars completely across Chrome, Safari, Edge, Firefox, iOS, Android */
   .no-scrollbar::-webkit-scrollbar,
   .scrollbar-none::-webkit-scrollbar,

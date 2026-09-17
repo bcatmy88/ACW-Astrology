@@ -9,11 +9,11 @@ import {
   FileText, 
   Trash2, 
   ChevronRight, 
-  ExternalLink,
-  Layers,
-  Sparkles
+  ExternalLink, 
+  Layers, 
+  Sparkles 
 } from 'lucide-react';
-import type { SavedClient, CaseItem, CaseStatus, AppLanguage } from '../types';
+import type { SavedClient, CaseItem, CaseStatus, AppLanguage, AppointmentItem } from '../types';
 import LanguageToggle from './LanguageToggle';
 
 interface PendingCasesViewProps {
@@ -25,6 +25,9 @@ interface PendingCasesViewProps {
   onInspectClientBazi?: (client: SavedClient) => void;
   lang?: AppLanguage;
   onToggleLang?: (lang: AppLanguage) => void;
+  appointments?: AppointmentItem[];
+  onSaveAppointment?: (appointment: AppointmentItem) => void;
+  onNavigateToAppointments?: (date?: string) => void;
 }
 
 const STATUS_CONFIG: Record<CaseStatus, { 
@@ -77,7 +80,10 @@ export default function PendingCasesView({
   onOpenMenu,
   onInspectClientBazi,
   lang = 'zh',
-  onToggleLang
+  onToggleLang,
+  appointments = [],
+  onSaveAppointment,
+  onNavigateToAppointments
 }: PendingCasesViewProps) {
   const [activeStatusFilter, setActiveStatusFilter] = useState<'ALL' | CaseStatus>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
