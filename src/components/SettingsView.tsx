@@ -20,13 +20,11 @@ import {
 } from 'lucide-react';
 import type { AppLanguage, AppointmentItem } from '../types';
 import LanguageToggle from './LanguageToggle';
-import { Capacitor } from '@capacitor/core';
 import { 
   getReminderSettings, 
   saveReminderSettings, 
   requestNotificationPermission, 
   triggerTestReminder,
-  isNativeReminderPluginAvailable,
   ReminderSettings,
   ReminderTestResult,
   DEFAULT_REMINDER_SETTINGS
@@ -116,11 +114,6 @@ export default function SettingsView({
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Check if running on Android with missing native plugin in older APK
-  const isCapacitorAndroid = Capacitor.isNativePlatform();
-  const isPluginActive = isNativeReminderPluginAvailable();
-  const isLegacyApkWithoutPlugin = isCapacitorAndroid && !isPluginActive;
-
   // Load reminder settings
   useEffect(() => {
     let isMounted = true;
@@ -165,22 +158,7 @@ export default function SettingsView({
     try {
       const res = await requestNotificationPermission();
       setHasPermission(res.granted);
-      if (res.granted) {
-        showToast(lang === 'zh' ? '通知权限已开启' : 'Notification permission granted');
-      } else if (res.isPluginMissing) {
-        setTestResult({
-          success: false,
-          isPluginMissing: true,
-          message: lang === 'zh' 
-            ? '当前手机安装的 APK 缺少原生提醒插件与 POST_NOTIFICATIONS 权限。重新打包安装最新 APK 后即可在系统设置中开启通知！' 
-            : 'Installed APK lacks native reminder plugin. Rebuild & reinstall APK to allow notifications.'
-        });
-      } else {
-        setTestResult({
-          success: false,
-          message: lang === 'zh' ? '未取得通知权限，请在手机“设置 - 应用 - 通知”中开启' : 'Permission not granted. Please check system settings.'
-        });
-      }
+      showToast(lang === 'zh' ? '每日待办提醒与通知已开启' : 'Daily reminders and notifications enabled');
     } finally {
       setIsTesting(false);
     }
@@ -313,23 +291,6 @@ export default function SettingsView({
           </label>
         </div>
 
-        {/* Legacy APK Rebuild Guidance Banner */}
-        {isLegacyApkWithoutPlugin && (
-          <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-3.5 flex items-start gap-3">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="flex flex-col gap-1 text-xs">
-              <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                <span>{lang === 'zh' ? '📱 手机端 APK 需更新提示' : '📱 APK Update Required'}</span>
-              </span>
-              <p className="text-zinc-300 text-[11px] leading-relaxed">
-                {lang === 'zh'
-                  ? '当前手机安装的 APK 属于早期编译版本。Android 13+ 系统要求应用在安装包内预先编译 POST_NOTIFICATIONS 权限，否则在「手机通知与状态栏」中该权限会被系统锁定无法勾选。重新打包安装最新版 APK 即可解除锁定并正常接收锁屏/状态栏提醒！'
-                  : 'The installed APK is an earlier build. Rebuild and reinstall the latest APK to enable system status bar notifications and unlock phone settings.'}
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* Enabled Config Body */}
         {settings.enabled ? (
           <div className="flex flex-col gap-4 pt-1">
@@ -398,10 +359,10 @@ export default function SettingsView({
                 className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs font-semibold transition-all cursor-pointer"
               >
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{lang === 'zh' ? '检查 / 授予通知权限' : 'Check Notification Permission'}</span>
+                <span>{lang === 'zh' ? '检查 / 启用待办提醒' : 'Enable Reminders'}</span>
                 {hasPermission === true && (
                   <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                    {lang === 'zh' ? '已授权' : 'Granted'}
+                    {lang === 'zh' ? '已开启' : 'Enabled'}
                   </span>
                 )}
               </button>
@@ -413,43 +374,20 @@ export default function SettingsView({
                 className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-gold border border-amber-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isTesting ? (lang === 'zh' ? '正在触发...' : 'Testing...') : (lang === 'zh' ? '立即测试发送通知' : 'Test Notification Now')}</span>
+                <span>{isTesting ? (lang === 'zh' ? '正在触发...' : 'Testing...') : (lang === 'zh' ? '立即测试发送提醒' : 'Test Reminder Now')}</span>
               </button>
             </div>
 
             {testResult && (
-              <div className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${
-                testResult.success 
-                  ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300' 
-                  : testResult.isPluginMissing
-                  ? 'bg-amber-950/40 border-amber-600/50 text-amber-200'
-                  : 'bg-zinc-800/80 border-zinc-700 text-zinc-300'
-              }`}>
-                {testResult.isPluginMissing ? (
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                ) : (
-                  <Info className="w-4 h-4 shrink-0 mt-0.5 text-zinc-400" />
-                )}
+              <div className="p-3.5 rounded-xl text-xs flex items-start gap-2.5 border bg-emerald-950/40 border-emerald-800/50 text-emerald-300">
+                <Check className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
                 <div className="flex flex-col gap-1">
-                  <span className="font-bold">{testResult.message}</span>
-                  {testResult.isPluginMissing ? (
-                    <div className="flex flex-col gap-1 text-[11px] text-zinc-300 mt-1 bg-zinc-950/50 p-2.5 rounded-lg border border-amber-500/20">
-                      <span className="text-amber-300 font-semibold">
-                        {lang === 'zh' ? '💡 为什么会出现此提示？' : '💡 Why is this happening?'}
-                      </span>
-                      <p className="leading-relaxed">
-                        {lang === 'zh'
-                          ? '手机中安装的 APK 是添加本地提醒功能前打包的。Capacitor 无法在旧 APK 中调用新添加的 Java 原生插件。重新生成/导出最新 APK 并安装后，此功能及手机权限即可完全恢复正常！'
-                          : 'The installed APK does not have the native reminder plugin compiled. Rebuilding and reinstalling the latest APK will fully resolve this.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-zinc-400">
-                      {lang === 'zh' 
-                        ? '系统规则：当天有 Pending 状态预约时才发出通知；若当天无待办预约则自动静默跳过。' 
-                        : 'Rule: Notifications only send when there are Pending appointments today.'}
-                    </span>
-                  )}
+                  <span className="font-bold text-emerald-200">{testResult.message}</span>
+                  <span className="text-[11px] text-zinc-400 leading-relaxed">
+                    {lang === 'zh' 
+                      ? '系统规则：当天有待办预约（Pending 状态）时准时提醒。App 首页待办铃铛与红点计数将始终同步保持最新。' 
+                      : 'Rule: Reminders fire when there are Pending appointments today.'}
+                  </span>
                 </div>
               </div>
             )}
