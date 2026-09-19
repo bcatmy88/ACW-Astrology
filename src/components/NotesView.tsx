@@ -27,6 +27,8 @@ interface NotesViewProps {
   onOpenMenu: () => void;
   lang?: AppLanguage;
   onToggleLang?: (lang: AppLanguage) => void;
+  profileAvatar?: string;
+  profileName?: string;
 }
 
 // Image compression helper
@@ -72,7 +74,9 @@ export default function NotesView({
   onDeleteNote,
   onOpenMenu,
   lang = 'zh',
-  onToggleLang
+  onToggleLang,
+  profileAvatar,
+  profileName
 }: NotesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -400,10 +404,14 @@ export default function NotesView({
       {/* FACEBOOK STYLE: "WHAT'S ON YOUR MIND?" COMPOSER TRIGGER */}
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-700 via-gold to-yellow-300 p-0.5 shadow-sm shrink-0">
-            <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-xs">
-              王
-            </div>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-700 via-gold to-yellow-300 p-0.5 shadow-sm shrink-0 overflow-hidden">
+            {profileAvatar ? (
+              <img src={profileAvatar} alt="Profile" className="w-full h-full rounded-full object-cover bg-zinc-950" />
+            ) : (
+              <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-xs">
+                王
+              </div>
+            )}
           </div>
           <button 
             type="button"
@@ -483,16 +491,20 @@ export default function NotesView({
                 {/* 1. POST HEADER (User Avatar & Author Info) */}
                 <div className="flex items-start justify-between gap-2 min-w-0">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-700 via-gold to-yellow-300 p-0.5 shadow-sm shrink-0">
-                      <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-xs">
-                        王
-                      </div>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-700 via-gold to-yellow-300 p-0.5 shadow-sm shrink-0 overflow-hidden">
+                      {profileAvatar ? (
+                        <img src={profileAvatar} alt="Author" className="w-full h-full rounded-full object-cover bg-zinc-950" />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center text-gold font-black text-xs">
+                          王
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs sm:text-sm font-bold text-white tracking-wide hover:underline cursor-pointer">
-                          Archan Wang
+                          {profileName || 'Archan Wang'}
                         </span>
                         <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-gold text-zinc-950" title="Verified">
                           <Check className="w-2.5 h-2.5 stroke-[3]" />

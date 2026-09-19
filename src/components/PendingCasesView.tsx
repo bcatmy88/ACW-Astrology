@@ -4,8 +4,6 @@ import {
   Search, 
   Menu, 
   User, 
-  Calendar as CalendarIcon, 
-  Clock, 
   FileText, 
   Trash2, 
   ChevronRight, 
@@ -97,7 +95,6 @@ export default function PendingCasesView({
   const [formTitle, setFormTitle] = useState<string>('');
   const [formDescription, setFormDescription] = useState<string>('');
   const [formStatus, setFormStatus] = useState<CaseStatus>('Reviewing');
-  const [formTargetDate, setFormTargetDate] = useState<string>('');
   
   // Client selection picker in modal
   const [isChoosingClient, setIsChoosingClient] = useState(false);
@@ -146,7 +143,6 @@ export default function PendingCasesView({
     setFormTitle('');
     setFormDescription('');
     setFormStatus('Reviewing');
-    setFormTargetDate(new Date().toISOString().split('T')[0]);
     setSelectedCase(null);
     setIsEditing(true);
     setIsChoosingClient(false);
@@ -159,7 +155,6 @@ export default function PendingCasesView({
     setFormTitle(item.title);
     setFormDescription(item.description);
     setFormStatus(item.status);
-    setFormTargetDate(item.targetDate || '');
     setIsEditing(true);
     setIsChoosingClient(false);
   };
@@ -180,7 +175,6 @@ export default function PendingCasesView({
       clientId: formClientId,
       description: formDescription,
       status: formStatus,
-      targetDate: formTargetDate,
       createdAt: selectedCase ? selectedCase.createdAt : now,
       updatedAt: now
     };
@@ -316,7 +310,6 @@ export default function PendingCasesView({
           filteredCases.map(item => {
             const client = clientMap.get(item.clientId);
             const cfg = STATUS_CONFIG[item.status];
-            const displayDate = item.targetDate || new Date(item.createdAt).toISOString().split('T')[0];
 
             return (
               <div
@@ -324,7 +317,7 @@ export default function PendingCasesView({
                 onClick={() => handleOpenCase(item)}
                 className={`group bg-zinc-900/70 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 p-3 sm:p-3.5 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all duration-150 active:scale-[0.99] shadow-sm hover:shadow-md ${cfg.bgColor}`}
               >
-                {/* Left: Client Avatar + Name, Date & Category */}
+                {/* Left: Client Avatar + Name & Category */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-zinc-950 border border-gold/30 flex items-center justify-center text-gold font-bold text-xs shrink-0 shadow-inner group-hover:border-gold/60 transition-colors">
                     {client?.name ? client.name[0] : <User className="w-4 h-4" />}
@@ -343,26 +336,26 @@ export default function PendingCasesView({
                       )}
                     </div>
 
-                    {/* 2. 个案日期 + 3. 个案种类 */}
+                    {/* 2. 个案种类与详情预览 */}
                     <div className="flex items-center gap-2 flex-wrap text-xs">
                       {/* 个案种类 */}
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-gold/10 border border-gold/25 text-gold text-[11px] font-semibold">
                         <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                        <span className="truncate max-w-[130px] sm:max-w-[200px]">
+                        <span className="truncate max-w-[150px] sm:max-w-[220px]">
                           {item.title || (lang === 'zh' ? '常规个案' : 'General')}
                         </span>
                       </span>
 
-                      {/* 个案日期 */}
-                      <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400 font-medium">
-                        <CalendarIcon className="w-3 h-3 text-zinc-500 shrink-0" />
-                        <span>{displayDate}</span>
-                      </span>
+                      {item.description && (
+                        <span className="text-[11px] text-zinc-500 truncate max-w-[150px] sm:max-w-[240px]">
+                          {item.description}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Right: 4. 目前状态 + Chevron */}
+                {/* Right: 3. 目前状态 + Chevron */}
                 <div className="flex items-center gap-2 shrink-0">
                   <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border flex items-center gap-1.5 whitespace-nowrap shadow-sm ${cfg.badgeColor}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${cfg.dotColor}`} />
@@ -567,25 +560,11 @@ export default function PendingCasesView({
                 </div>
               </div>
 
-              {/* 4. TARGET DATE */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
-                  <CalendarIcon className="w-3 h-3" />
-                  日期
-                </label>
-                <input
-                  type="date"
-                  value={formTargetDate}
-                  onChange={(e) => setFormTargetDate(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white focus:outline-none focus:border-gold/50"
-                />
-              </div>
-
-              {/* 5. CASE DESCRIPTION */}
+              {/* 4. CASE DESCRIPTION */}
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
                   <FileText className="w-3 h-3" />
-                  详情
+                  {lang === 'zh' ? '详情' : 'Description'}
                 </label>
                 <textarea
                   rows={4}

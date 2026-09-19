@@ -37,7 +37,6 @@ export interface CaseItem {
   status: CaseStatus;
   createdAt: number;
   updatedAt: number;
-  targetDate?: string;
 }
 
 export interface NoteItem {

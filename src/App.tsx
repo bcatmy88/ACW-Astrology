@@ -48,8 +48,10 @@ import PendingCasesView from './components/PendingCasesView';
 import NotesView from './components/NotesView';
 import BackupView from './components/BackupView';
 import AppointmentsView from './components/AppointmentsView';
+import SettingsView from './components/SettingsView';
 import LanguageToggle from './components/LanguageToggle';
 import NotificationModal from './components/NotificationModal';
+import { syncAppointmentsToNative, checkNotificationLaunch } from './services/nativeReminder';
 
 // --- Types ---
 interface BaziData {
@@ -344,12 +346,34 @@ function DestinyCard({ client, onReplace }: { client: SavedClient, onReplace: ()
 
 // --- Main App ---
 export default function App() {
-  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'cases' | 'notes' | 'backup' | 'appointments'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'cases' | 'notes' | 'backup' | 'appointments' | 'settings'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
+
+  // Profile avatar and name for Notes view
+  const [profileAvatar, setProfileAvatar] = useState<string>(() => {
+    return localStorage.getItem('archan_wang_profile_avatar') || '';
+  });
+  const [profileName, setProfileName] = useState<string>(() => {
+    return localStorage.getItem('archan_wang_profile_name') || 'Archan Wang';
+  });
+
+  const handleSaveProfileAvatar = (avatar: string) => {
+    setProfileAvatar(avatar);
+    if (avatar) {
+      localStorage.setItem('archan_wang_profile_avatar', avatar);
+    } else {
+      localStorage.removeItem('archan_wang_profile_avatar');
+    }
+  };
+
+  const handleSaveProfileName = (name: string) => {
+    setProfileName(name);
+    localStorage.setItem('archan_wang_profile_name', name);
+  };
 
   const [birthDate, setBirthDate] = useState('1990-05-20');
   const [birthTime, setBirthTime] = useState('10:30');
@@ -383,10 +407,10 @@ export default function App() {
     return `${y}-${m}-${d}`;
   }, []);
 
-  // Today's unfinished appointments + cases
+  // Today's unfinished appointments + active cases
   const todayUnfinishedCount = useMemo(() => {
     const apts = appointments.filter(a => a.status === 'Pending' && a.date === todayStr).length;
-    const cs = cases.filter(c => (c.status === 'Reviewing' || c.status === 'Executing') && c.targetDate === todayStr).length;
+    const cs = cases.filter(c => c.status === 'Reviewing' || c.status === 'Executing').length;
     return apts + cs;
   }, [appointments, cases, todayStr]);
 
@@ -435,12 +459,35 @@ export default function App() {
 
     if (savedAppointments) {
       try {
-        setAppointments(JSON.parse(savedAppointments));
+        const parsedApts = JSON.parse(savedAppointments);
+        setAppointments(parsedApts);
+        syncAppointmentsToNative(parsedApts);
       } catch (e) {
         console.error("Error parsing appointments", e);
       }
     }
+
+    // Check if launched from notification tap
+    const handleNotificationOpen = () => {
+      setView('appointments');
+    };
+    window.addEventListener('open_appointments_view', handleNotificationOpen);
+
+    checkNotificationLaunch().then(opened => {
+      if (opened) {
+        setView('appointments');
+      }
+    });
+
+    return () => {
+      window.removeEventListener('open_appointments_view', handleNotificationOpen);
+    };
   }, []);
+
+  // Synchronize appointments with native Android whenever state changes
+  useEffect(() => {
+    syncAppointmentsToNative(appointments);
+  }, [appointments]);
 
   const saveToLocalStorage = (updatedClients: SavedClient[]) => {
     localStorage.setItem('archan_wang_clients', JSON.stringify(updatedClients));
@@ -1062,6 +1109,20 @@ export default function App() {
                     <span>{lang === 'zh' ? '备份' : 'Backup'}</span>
                   </button>
 
+                  <button 
+                    onClick={() => {
+                      setView('settings');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center gap-3 p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'settings' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <Settings className="w-5 h-5" />
+                    <span>{lang === 'zh' ? '设置' : 'Settings'}</span>
+                  </button>
+
                   {/* 待办提醒 placed at the very bottom of the sidebar menu */}
                   <button 
                     onClick={() => {
@@ -1083,7 +1144,7 @@ export default function App() {
                 </nav>
 
                 <div className="mt-auto pt-6 border-t border-zinc-900">
-                  <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.2em] mb-4 pl-4 text-center">Destiny Analysis Engine v1.0</p>
+                  <p className="text-[10px] text-zinc-600 font-black uppercase tracking-[0.2em] mb-4 pl-4 text-center">ARCHAN WANG 阿赞旺</p>
                 </div>
               </motion.div>
             </>
@@ -1483,24 +1544,24 @@ export default function App() {
                     className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
                   />
                 </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-2">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="flex flex-col gap-2 shrink-0">
                       <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">时间 (Time)</label>
                       <input 
                         type="time" 
                         value={birthTime} 
                         onChange={(e) => setBirthTime(e.target.value)} 
-                        className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
+                        className="w-32 sm:w-36 bg-black border border-zinc-800 rounded-xl px-2.5 sm:px-3.5 py-3.5 text-sm sm:text-base text-white focus:border-gold focus:ring-0 transition-all cursor-pointer font-bold" 
                       />
                     </div>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2 flex-1 min-w-0">
                        <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">时区 (Timezone)</label>
                        <input 
                          type="number" 
                          value={timezone} 
                          onChange={(e) => setTimezone(Number(e.target.value))} 
                          placeholder="+8"
-                         className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold" 
+                         className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-sm sm:text-base text-white focus:border-gold focus:ring-0 transition-all font-bold" 
                        />
                     </div>
                   </div>
@@ -2745,6 +2806,8 @@ export default function App() {
           onOpenMenu={() => setIsSideMenuOpen(true)}
           lang={lang}
           onToggleLang={handleSetLang}
+          profileAvatar={profileAvatar}
+          profileName={profileName}
         />
       )}
 
@@ -2761,6 +2824,21 @@ export default function App() {
           onOpenMenu={() => setIsSideMenuOpen(true)}
           lang={lang}
           onToggleLang={handleSetLang}
+        />
+      )}
+
+      {/* VIEW: SETTINGS */}
+      {view === 'settings' && (
+        <SettingsView
+          onOpenMenu={() => setIsSideMenuOpen(true)}
+          lang={lang}
+          onToggleLang={handleSetLang}
+          appointments={appointments}
+          profileAvatar={profileAvatar}
+          onSaveProfileAvatar={handleSaveProfileAvatar}
+          profileName={profileName}
+          onSaveProfileName={handleSaveProfileName}
+          onNavigateToNotes={() => setView('notes')}
         />
       )}
 

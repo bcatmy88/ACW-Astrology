@@ -89,7 +89,6 @@ export default function NotificationModal({
   const tomorrowStr = useMemo(() => getTomorrowString(), []);
   const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || todayStr);
   const [activeTab, setActiveTab] = useState<'all' | 'appointments' | 'cases'>('all');
-  const [showUndatedCases, setShowUndatedCases] = useState<boolean>(false);
 
   // Synchronize when initialDate changes
   React.useEffect(() => {
@@ -113,54 +112,37 @@ export default function NotificationModal({
     }).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [appointments, selectedDate]);
 
-  // Unfinished cases targeting this date
-  const unfinishedCasesOnDate = useMemo(() => {
+  // All ongoing unfinished cases (not constrained by date)
+  const unfinishedCases = useMemo(() => {
     return cases.filter(c => {
-      const isUnfinished = c.status === 'Reviewing' || c.status === 'Executing';
-      return isUnfinished && c.targetDate === selectedDate;
-    }).sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [cases, selectedDate]);
-
-  // Undated unfinished cases (no target date assigned)
-  const undatedUnfinishedCases = useMemo(() => {
-    return cases.filter(c => {
-      const isUnfinished = c.status === 'Reviewing' || c.status === 'Executing';
-      return isUnfinished && !c.targetDate;
+      return c.status === 'Reviewing' || c.status === 'Executing';
     }).sort((a, b) => b.updatedAt - a.updatedAt);
   }, [cases]);
 
   // Total unfinished on this same date
-  const totalUnfinishedOnDate = unfinishedAppointmentsOnDate.length + unfinishedCasesOnDate.length;
+  const totalUnfinishedOnDate = unfinishedAppointmentsOnDate.length + unfinishedCases.length;
 
   // Other dates with pending items (for quick switching)
   const otherDatesWithPending = useMemo(() => {
-    const dateMap = new Map<string, { appointmentsCount: number; casesCount: number }>();
+    const dateMap = new Map<string, number>();
 
     appointments.forEach(apt => {
       if (apt.status === 'Pending' && apt.date) {
-        const entry = dateMap.get(apt.date) || { appointmentsCount: 0, casesCount: 0 };
-        entry.appointmentsCount += 1;
-        dateMap.set(apt.date, entry);
-      }
-    });
-
-    cases.forEach(c => {
-      if ((c.status === 'Reviewing' || c.status === 'Executing') && c.targetDate) {
-        const entry = dateMap.get(c.targetDate) || { appointmentsCount: 0, casesCount: 0 };
-        entry.casesCount += 1;
-        dateMap.set(c.targetDate, entry);
+        const count = dateMap.get(apt.date) || 0;
+        dateMap.set(apt.date, count + 1);
       }
     });
 
     // Array sorted by date
     return Array.from(dateMap.entries())
-      .map(([date, counts]) => ({
+      .map(([date, count]) => ({
         date,
-        total: counts.appointmentsCount + counts.casesCount,
-        ...counts
+        total: count,
+        appointmentsCount: count,
+        casesCount: 0
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [appointments, cases]);
+  }, [appointments]);
 
   // Quick action: Complete an appointment
   const handleMarkAppointmentCompleted = (apt: AppointmentItem, e: React.MouseEvent) => {
@@ -311,12 +293,12 @@ export default function NotificationModal({
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs sm:text-sm font-semibold text-zinc-400">
-                    {lang === 'zh' ? '未完成个案' : 'Cases'}
+                    {lang === 'zh' ? '进行中个案' : 'Active Cases'}
                   </span>
                   <ClipboardList className="w-4 h-4 text-sky-400" />
                 </div>
                 <div className="text-xl font-black text-sky-400 mt-1">
-                  {unfinishedCasesOnDate.length}
+                  {unfinishedCases.length}
                   {lang === 'zh' && <span className="text-xs font-normal text-zinc-400 ml-1">项</span>}
                 </div>
               </div>
@@ -496,13 +478,13 @@ export default function NotificationModal({
             )}
 
             {/* 2. UNFINISHED CASES SECTION */}
-            {(activeTab === 'all' || activeTab === 'cases') && unfinishedCasesOnDate.length > 0 && (
+            {(activeTab === 'all' || activeTab === 'cases') && unfinishedCases.length > 0 && (
               <section className="flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
                     <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-sky-400">
-                      {lang === 'zh' ? '未完成个案' : 'Cases'} ({unfinishedCasesOnDate.length})
+                      {lang === 'zh' ? '进行中个案' : 'Active Cases'} ({unfinishedCases.length})
                     </h3>
                   </div>
                   {onNavigateToCases && (
@@ -521,7 +503,7 @@ export default function NotificationModal({
                 </div>
 
                 <div className="flex flex-col gap-2.5">
-                  {unfinishedCasesOnDate.map(item => {
+                  {unfinishedCases.map(item => {
                     const client = clientMap.get(item.clientId);
                     const isReviewing = item.status === 'Reviewing';
                     return (
@@ -573,7 +555,7 @@ export default function NotificationModal({
 
                         {/* Jump to Case or Client */}
                         <div className="flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-zinc-800/40">
-                          <span>{lang === 'zh' ? '目标: ' : 'Date: '}{item.targetDate || selectedDate}</span>
+                          <span className="text-zinc-500">{lang === 'zh' ? '个案记录' : 'Case'}</span>
                           <div className="flex items-center gap-3">
                             {client && onInspectClientBazi && (
                               <button
@@ -597,7 +579,7 @@ export default function NotificationModal({
                                 }}
                                 className="hover:text-gold flex items-center gap-1 cursor-pointer py-1 px-1.5"
                               >
-                                <span>{lang === 'zh' ? '个案详情' : 'Detail'}</span>
+                                <span>{lang === 'zh' ? '个案看板' : 'Detail'}</span>
                                 <ArrowRight className="w-3.5 h-3.5" />
                               </button>
                             )}
@@ -608,54 +590,6 @@ export default function NotificationModal({
                   })}
                 </div>
               </section>
-            )}
-
-            {/* 3. OPTIONAL UNDATED CASES ACCORDION */}
-            {undatedUnfinishedCases.length > 0 && (
-              <div className="pt-2 border-t border-zinc-800/60">
-                <button
-                  type="button"
-                  onClick={() => setShowUndatedCases(!showUndatedCases)}
-                  className="w-full min-h-[44px] flex items-center justify-between p-3 rounded-xl bg-zinc-900/40 hover:bg-zinc-900 text-xs sm:text-sm font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <span className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-zinc-400" />
-                    <span>{lang === 'zh' ? '未指定日期的个案' : 'Undated Cases'}</span>
-                    <span className="text-xs bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-bold">
-                      {undatedUnfinishedCases.length}
-                    </span>
-                  </span>
-                  <ChevronRight className={`w-4 h-4 transition-transform ${showUndatedCases ? 'rotate-90' : ''}`} />
-                </button>
-
-                {showUndatedCases && (
-                  <div className="flex flex-col gap-2 mt-2.5 pl-2 border-l border-zinc-800">
-                    {undatedUnfinishedCases.map(item => {
-                      const client = clientMap.get(item.clientId);
-                      return (
-                        <div 
-                          key={item.id}
-                          className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-3 flex items-center justify-between gap-2.5"
-                        >
-                          <div className="min-w-0">
-                            <p className="text-xs sm:text-sm font-bold text-white truncate">{item.title}</p>
-                            <p className="text-xs text-zinc-400 truncate mt-0.5">
-                              {client ? client.name : ''} {item.description ? `· ${item.description}` : ''}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => handleMarkCaseSettled(item, e)}
-                            className="min-h-[34px] px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-zinc-950 transition-all shrink-0 cursor-pointer"
-                          >
-                            {lang === 'zh' ? '圆满' : 'Done'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             )}
           </div>
 

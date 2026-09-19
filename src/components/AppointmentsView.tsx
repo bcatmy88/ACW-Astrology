@@ -22,10 +22,12 @@ import {
   Check,
   Contact,
   UserPlus,
-  UserCheck
+  UserCheck,
+  Bell
 } from 'lucide-react';
 import type { AppointmentItem, AppointmentStatus, SavedClient, AppLanguage, CaseItem } from '../types';
 import LanguageToggle from './LanguageToggle';
+import AppointmentReminderModal from './AppointmentReminderModal';
 
 interface AppointmentsViewProps {
   appointments: AppointmentItem[];
@@ -101,6 +103,7 @@ export default function AppointmentsView({
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   // Form fields
@@ -379,6 +382,15 @@ export default function AppointmentsView({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsReminderModalOpen(true)}
+            className="min-h-[40px] px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-gold/50 text-zinc-300 hover:text-gold transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm"
+            title={lang === 'zh' ? '每日预约提醒设置' : 'Daily Reminder Settings'}
+          >
+            <Bell className="w-4 h-4 text-gold" />
+            <span className="text-xs font-bold hidden sm:inline">{lang === 'zh' ? '提醒设置' : 'Reminders'}</span>
+          </button>
           {onToggleLang && <LanguageToggle lang={lang} onToggle={onToggleLang} className="shrink-0" />}
           <button
             type="button"
@@ -1175,6 +1187,14 @@ export default function AppointmentsView({
           </div>
         </div>
       )}
+
+      {/* DAILY APPOINTMENT REMINDER MODAL */}
+      <AppointmentReminderModal
+        isOpen={isReminderModalOpen}
+        onClose={() => setIsReminderModalOpen(false)}
+        appointments={appointments}
+        lang={lang}
+      />
     </div>
   );
 }
