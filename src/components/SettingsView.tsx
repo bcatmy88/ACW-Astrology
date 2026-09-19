@@ -16,7 +16,12 @@ import {
   Globe,
   Sliders,
   ChevronRight,
-  Info
+  Info,
+  Smartphone,
+  BatteryCharging,
+  Zap,
+  ExternalLink,
+  Timer
 } from 'lucide-react';
 import type { AppLanguage, AppointmentItem } from '../types';
 import LanguageToggle from './LanguageToggle';
@@ -25,8 +30,17 @@ import {
   saveReminderSettings, 
   requestNotificationPermission, 
   triggerTestReminder,
+  scheduleOneMinuteTestReminder,
+  checkNativePermissions,
+  openNativeNotificationSettings,
+  openNativeExactAlarmSettings,
+  openNativeBatteryOptimizationSettings,
+  getNativeScheduledReminders,
+  isNativeReminderPluginAvailable,
   ReminderSettings,
   ReminderTestResult,
+  NativePermissionStatus,
+  ScheduledReminderItem,
   DEFAULT_REMINDER_SETTINGS
 } from '../services/nativeReminder';
 
@@ -42,7 +56,7 @@ interface SettingsViewProps {
   onNavigateToNotes?: () => void;
 }
 
-// Compress uploaded profile image to a reasonable size (max 600px square, JPEG 0.85)
+// Compress uploaded profile image to a reasonable size (max 500px square, JPEG 0.85)
 async function compressAvatar(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -58,17 +72,17 @@ async function compressAvatar(file: File): Promise<string> {
         const startX = (width - minDim) / 2;
         const startY = (height - minDim) / 2;
         
-        const targetDim = Math.min(minDim, MAX_SIZE);
-        canvas.width = targetDim;
-        canvas.height = targetDim;
-        
+        canvas.width = MAX_SIZE;
+        canvas.height = MAX_SIZE;
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, targetDim, targetDim);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
-        } else {
-          resolve(e.target?.result as string);
+        if (!ctx) {
+          reject(new Error('Canvas context not available'));
+          return;
         }
+
+        ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, MAX_SIZE, MAX_SIZE);
+        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(compressed);
       };
       img.onerror = reject;
       img.src = e.target?.result as string;
@@ -78,15 +92,14 @@ async function compressAvatar(file: File): Promise<string> {
   });
 }
 
-const QUICK_TIMES = ['07:00', '07:30', '08:00', '08:30', '09:00', '10:00'];
+const QUICK_TIMES = ['07:30', '08:00', '08:30', '09:00', '09:30', '10:00'];
 
 const LEAD_TIME_OPTIONS = [
-  { value: 15, labelZh: '15 分钟前', labelEn: '15 mins before' },
-  { value: 30, labelZh: '30 分钟前', labelEn: '30 mins before' },
-  { value: 45, labelZh: '45 分钟前', labelEn: '45 mins before' },
-  { value: 60, labelZh: '1 小时前', labelEn: '1 hour before' },
-  { value: 120, labelZh: '2 小时前', labelEn: '2 hours before' },
-  { value: 1440, labelZh: '1 天前', labelEn: '1 day before' },
+  { value: 15, labelZh: '提前 15 分钟', labelEn: '15 mins before' },
+  { value: 30, labelZh: '提前 30 分钟 (推荐)', labelEn: '30 mins before (Rec)' },
+  { value: 60, labelZh: '提前 1 小时', labelEn: '1 hour before' },
+  { value: 120, labelZh: '提前 2 小时', labelEn: '2 hours before' },
+  { value: 1440, labelZh: '提前 1 天', labelEn: '1 day before' },
 ];
 
 export default function SettingsView({
@@ -106,15 +119,35 @@ export default function SettingsView({
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<ReminderTestResult | null>(null);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [saveBanner, setSaveBanner] = useState<string | null>(null);
+
+  // Native permissions & status
+  const [permStatus, setPermStatus] = useState<NativePermissionStatus | null>(null);
+  const [scheduledAlarms, setScheduledAlarms] = useState<ScheduledReminderItem[]>([]);
+  const [isRefreshingPerms, setIsRefreshingPerms] = useState(false);
+
+  // 1-minute lockscreen test countdown
+  const [testCountdown, setTestCountdown] = useState<number | null>(null);
+  const [countdownMsg, setCountdownMsg] = useState<string | null>(null);
 
   // Profile fields
   const [nameInput, setNameInput] = useState(profileName || 'Archan Wang');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load reminder settings
+  // Load reminder settings & permissions
+  const refreshPermissions = async () => {
+    setIsRefreshingPerms(true);
+    try {
+      const status = await checkNativePermissions();
+      setPermStatus(status);
+      const alarms = await getNativeScheduledReminders();
+      setScheduledAlarms(alarms);
+    } finally {
+      setIsRefreshingPerms(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
     getReminderSettings().then(res => {
@@ -123,10 +156,28 @@ export default function SettingsView({
         setIsLoadingSettings(false);
       }
     });
+
+    refreshPermissions();
+
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // Handle test countdown timer
+  useEffect(() => {
+    if (testCountdown === null || testCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setTestCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [testCountdown]);
 
   useEffect(() => {
     setNameInput(profileName || 'Archan Wang');
@@ -136,7 +187,7 @@ export default function SettingsView({
     setSaveBanner(msg);
     setTimeout(() => {
       setSaveBanner(null);
-    }, 3000);
+    }, 3500);
   };
 
   // Save reminder settings
@@ -145,7 +196,7 @@ export default function SettingsView({
     setIsSaving(true);
     try {
       await saveReminderSettings(newSettings);
-      showToast(lang === 'zh' ? '提醒设置已更新' : 'Reminder settings saved');
+      showToast(lang === 'zh' ? '提醒设置已保存并同步至系统后台' : 'Reminder settings saved & synced to Android');
     } catch (e) {
       console.error('Failed to save reminder settings', e);
     } finally {
@@ -157,8 +208,12 @@ export default function SettingsView({
     setIsTesting(true);
     try {
       const res = await requestNotificationPermission();
-      setHasPermission(res.granted);
-      showToast(lang === 'zh' ? '每日待办提醒与通知已开启' : 'Daily reminders and notifications enabled');
+      await refreshPermissions();
+      if (res.granted) {
+        showToast(lang === 'zh' ? '通知权限已开启！' : 'Notification permission granted!');
+      } else {
+        showToast(lang === 'zh' ? '权限未被授予，请在系统设置中允许' : 'Permission not granted, please enable in system settings');
+      }
     } finally {
       setIsTesting(false);
     }
@@ -178,6 +233,20 @@ export default function SettingsView({
         success: false,
         message: e?.message || (lang === 'zh' ? '触发测试失败' : 'Failed to trigger test notification')
       });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleOneMinuteLockScreenTest = async () => {
+    setIsTesting(true);
+    try {
+      const res = await scheduleOneMinuteTestReminder(60, lang);
+      setTestCountdown(60);
+      setCountdownMsg(res.message);
+      showToast(res.message);
+    } catch (e: any) {
+      alert(e?.message || 'Failed to schedule 1-minute test');
     } finally {
       setIsTesting(false);
     }
@@ -216,7 +285,6 @@ export default function SettingsView({
     showToast(lang === 'zh' ? '姓名已保存！' : 'Name saved!');
   };
 
-  // Calculate upcoming appointment preview example
   const exampleLeadMinutes = settings.leadTimeMinutes || 30;
 
   return (
@@ -237,7 +305,7 @@ export default function SettingsView({
           <div className="flex items-center gap-2">
             <Sliders className="w-5 h-5 text-gold" />
             <h1 className="text-base sm:text-lg font-bold text-white tracking-wide">
-              {lang === 'zh' ? '系统设置' : 'Settings'}
+              {lang === 'zh' ? '系统与提醒设置' : 'System & Reminder Settings'}
             </h1>
           </div>
         </div>
@@ -257,7 +325,217 @@ export default function SettingsView({
         </div>
       )}
 
-      {/* SECTION 1: 手机 NOTIFICATION 现实时间 (DAILY NOTIFICATION TIME) */}
+      {/* SECTION 1: ANDROID NATIVE PERMISSIONS & BACKGROUND ENGINE */}
+      <div className="bg-zinc-900/90 border border-gold/30 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-gold/40 flex items-center justify-center text-gold shrink-0">
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                {lang === 'zh' ? 'Android 原生提醒引擎与系统权限' : 'Android Native Reminder Engine & Permissions'}
+              </h2>
+              <p className="text-xs text-zinc-400">
+                {lang === 'zh' ? '基于 AlarmManager 与高优先级锁屏通知，实现手机黑屏/锁屏时强行推送' : 'Ensures precise notification dispatch even when screen is locked or app is closed'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={refreshPermissions}
+            disabled={isRefreshingPerms}
+            className="text-[11px] px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors font-medium cursor-pointer"
+          >
+            {isRefreshingPerms ? (lang === 'zh' ? '检测中...' : 'Checking...') : (lang === 'zh' ? '刷新状态' : 'Refresh')}
+          </button>
+        </div>
+
+        {/* Permission Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Permission 1: Notification */}
+          <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-xl flex flex-col justify-between gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
+                <Bell className="w-4 h-4 text-gold shrink-0" />
+                <span>{lang === 'zh' ? '通知发布权限' : 'Notifications'}</span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                permStatus?.hasNotificationPermission
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+              }`}>
+                {permStatus?.hasNotificationPermission 
+                  ? (lang === 'zh' ? '已开启' : 'Allowed')
+                  : (lang === 'zh' ? '未允许' : 'Blocked')}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-tight">
+              {lang === 'zh' ? '允许在状态栏和锁屏界面弹出预约通知' : 'Allows alert display on status bar & lock screen'}
+            </p>
+            <div className="flex gap-1.5 pt-1 border-t border-zinc-800/80">
+              {!permStatus?.hasNotificationPermission ? (
+                <button
+                  type="button"
+                  onClick={handleRequestPermission}
+                  className="flex-1 py-1 px-2 bg-gold hover:bg-yellow-400 text-zinc-950 rounded-lg text-xs font-bold transition-all text-center cursor-pointer"
+                >
+                  {lang === 'zh' ? '授权开启' : 'Grant'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => openNativeNotificationSettings()}
+                className="flex-1 py-1 px-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>{lang === 'zh' ? '系统设置' : 'Settings'}</span>
+                <ExternalLink className="w-3 h-3 text-zinc-400" />
+              </button>
+            </div>
+          </div>
+
+          {/* Permission 2: Exact Alarm */}
+          <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-xl flex flex-col justify-between gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
+                <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>{lang === 'zh' ? '精确闹钟唤醒' : 'Exact Alarms'}</span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                permStatus?.canScheduleExactAlarms !== false
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+              }`}>
+                {permStatus?.canScheduleExactAlarms !== false
+                  ? (lang === 'zh' ? '准时触发' : 'Exact')
+                  : (lang === 'zh' ? '受系统限制' : 'Restricted')}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-tight">
+              {lang === 'zh' ? 'Android 12+ 准时闹钟唤醒，规避系统省电延迟' : 'Uses AlarmManager RTC_WAKEUP for on-the-minute accuracy'}
+            </p>
+            <div className="flex gap-1.5 pt-1 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => openNativeExactAlarmSettings()}
+                className="w-full py-1 px-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>{lang === 'zh' ? '精确闹钟权限设置' : 'Exact Alarm Settings'}</span>
+                <ExternalLink className="w-3 h-3 text-zinc-400" />
+              </button>
+            </div>
+          </div>
+
+          {/* Permission 3: Battery Optimization */}
+          <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-xl flex flex-col justify-between gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
+                <BatteryCharging className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{lang === 'zh' ? '电池优化白名单' : 'Battery Whitelist'}</span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                permStatus?.isIgnoringBatteryOptimizations
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-zinc-800 text-zinc-300'
+              }`}>
+                {permStatus?.isIgnoringBatteryOptimizations
+                  ? (lang === 'zh' ? '后台保活' : 'Unrestricted')
+                  : (lang === 'zh' ? '受电池优化' : 'Optimized')}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400 leading-tight">
+              {lang === 'zh' ? '加入白名单可避免黑屏时被小米/华为等厂商深度清理' : 'Prevents aggressive OEM task killers from delaying alarms'}
+            </p>
+            <div className="flex gap-1.5 pt-1 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => openNativeBatteryOptimizationSettings()}
+                className="w-full py-1 px-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>{lang === 'zh' ? '忽略电池优化设置' : 'Battery Settings'}</span>
+                <ExternalLink className="w-3 h-3 text-zinc-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* REAL-TIME TEST LAB */}
+        <div className="pt-2 border-t border-zinc-800 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Timer className="w-4 h-4 text-gold" />
+              {lang === 'zh' ? '黑屏 / 锁屏提醒实机验证工具' : 'Real Lock Screen Verification Tools'}
+            </span>
+            {scheduledAlarms.length > 0 && (
+              <span className="text-[11px] text-gold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 font-semibold">
+                {lang === 'zh' ? `已在系统注册 ${scheduledAlarms.length} 个精确闹钟` : `${scheduledAlarms.length} active alarms`}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Test Button 1: Immediate Push */}
+            <button
+              type="button"
+              onClick={handleTestNotification}
+              disabled={isTesting}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 rounded-xl text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Send className="w-3.5 h-3.5 text-gold" />
+              <span>{isTesting ? (lang === 'zh' ? '触发中...' : 'Sending...') : (lang === 'zh' ? '立即发送高优先级测试通知' : 'Instant High-Priority Test')}</span>
+            </button>
+
+            {/* Test Button 2: 1-Minute Lockscreen Exact Alarm */}
+            <button
+              type="button"
+              onClick={handleOneMinuteLockScreenTest}
+              disabled={isTesting || (testCountdown !== null && testCountdown > 0)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-gold hover:bg-yellow-400 text-zinc-950 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Timer className="w-4 h-4" />
+              <span>
+                {testCountdown !== null && testCountdown > 0 
+                  ? (lang === 'zh' ? `倒计时 ${testCountdown} 秒 (请立即锁屏)` : `Count: ${testCountdown}s (Lock phone now)`)
+                  : (lang === 'zh' ? '⏰ 测试 1 分钟后锁屏唤醒闹钟' : 'Test 1-Min Lock Screen Alarm')}
+              </span>
+            </button>
+          </div>
+
+          {/* Active Countdown Banner */}
+          {testCountdown !== null && testCountdown > 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-950/50 border border-gold/40 text-amber-200 text-xs flex items-start gap-3 animate-pulse">
+              <Timer className="w-5 h-5 text-gold shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-white text-sm">
+                  {lang === 'zh' ? `闹钟已注册！还剩 ${testCountdown} 秒触发` : `Alarm registered! ${testCountdown}s remaining`}
+                </span>
+                <p className="text-zinc-300 leading-relaxed text-[11px]">
+                  {lang === 'zh'
+                    ? '【操作指引】：请立即按手机侧边电源键关灭屏幕或锁定手机。60 秒到达时，Android 系统 AlarmManager 将唤醒 CPU 并准时在锁屏界面弹出金色提示通知！'
+                    : 'Action guide: Lock your phone or turn off screen now. When 60s expires, Android AlarmManager will wake up and alert on your lock screen!'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {testResult && (
+            <div className="p-3 rounded-xl text-xs flex items-start gap-2 border bg-emerald-950/40 border-emerald-800/50 text-emerald-300">
+              <Check className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-bold text-emerald-200">{testResult.message}</span>
+                <span className="text-[11px] text-zinc-400">
+                  {lang === 'zh' ? '通知渠道：appointment_reminders (高优先级、振动、金色指示灯、锁屏可见)' : 'Channel: appointment_reminders (High priority, lockscreen visible)'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* SECTION 2: 手机 NOTIFICATION 现实时间 (DAILY NOTIFICATION TIME) */}
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-sm">
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3.5">
           <div className="flex items-center gap-3">
@@ -266,10 +544,10 @@ export default function SettingsView({
             </div>
             <div className="flex flex-col">
               <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                {lang === 'zh' ? '手机每日预约通知' : 'Daily Appointment Notification'}
+                {lang === 'zh' ? '每日晨间预约汇总通知' : 'Daily Morning Appointment Summary'}
               </h2>
               <p className="text-xs text-zinc-400">
-                {lang === 'zh' ? '设置手机状态栏每天弹出预约提醒的现实时间' : 'Configure daily morning notification trigger time'}
+                {lang === 'zh' ? '每天早晨准时汇总推送当天所有待办客户预约' : 'Sends a comprehensive summary notification each morning'}
               </p>
             </div>
           </div>
@@ -299,7 +577,7 @@ export default function SettingsView({
               <div className="flex items-center gap-2.5">
                 <Clock className="w-4 h-4 text-gold shrink-0" />
                 <span className="text-xs sm:text-sm font-semibold text-zinc-200">
-                  {lang === 'zh' ? '每天提醒现实时间' : 'Notification Trigger Time'}
+                  {lang === 'zh' ? '每日提醒现实时间' : 'Notification Trigger Time'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -350,56 +628,15 @@ export default function SettingsView({
                 })}
               </div>
             </div>
-
-            {/* Action Tools & Permissions */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800/60">
-              <button
-                type="button"
-                onClick={handleRequestPermission}
-                className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-xl text-xs font-semibold transition-all cursor-pointer"
-              >
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{lang === 'zh' ? '检查 / 启用待办提醒' : 'Enable Reminders'}</span>
-                {hasPermission === true && (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                    {lang === 'zh' ? '已开启' : 'Enabled'}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleTestNotification}
-                disabled={isTesting}
-                className="flex items-center gap-1.5 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-gold border border-amber-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isTesting ? (lang === 'zh' ? '正在触发...' : 'Testing...') : (lang === 'zh' ? '立即测试发送提醒' : 'Test Reminder Now')}</span>
-              </button>
-            </div>
-
-            {testResult && (
-              <div className="p-3.5 rounded-xl text-xs flex items-start gap-2.5 border bg-emerald-950/40 border-emerald-800/50 text-emerald-300">
-                <Check className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
-                <div className="flex flex-col gap-1">
-                  <span className="font-bold text-emerald-200">{testResult.message}</span>
-                  <span className="text-[11px] text-zinc-400 leading-relaxed">
-                    {lang === 'zh' 
-                      ? '系统规则：当天有待办预约（Pending 状态）时准时提醒。App 首页待办铃铛与红点计数将始终同步保持最新。' 
-                      : 'Rule: Reminders fire when there are Pending appointments today.'}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div className="py-2 text-xs text-zinc-500">
-            {lang === 'zh' ? '每日手机通知已停用。您仍可在应用内“待办提醒”弹窗中随时查看。' : 'Daily notifications are disabled.'}
+            {lang === 'zh' ? '每日早晨预约通知已停用。具体预约临近提醒依然独立生效。' : 'Daily morning notifications disabled.'}
           </div>
         )}
       </div>
 
-      {/* SECTION 2: 预约开始前多久开始提醒 (LEAD TIME REMINDER) */}
+      {/* SECTION 3: 预约临近提前提醒 (LEAD TIME REMINDER) */}
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-sm">
         <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3.5">
           <div className="flex items-center gap-3">
@@ -408,10 +645,10 @@ export default function SettingsView({
             </div>
             <div className="flex flex-col">
               <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-                {lang === 'zh' ? '预约临近提前提醒' : 'Ahead-of-Time Appointment Alert'}
+                {lang === 'zh' ? '每个预约临近独立精确提醒' : 'Ahead-of-Time Individual Appointment Alert'}
               </h2>
               <p className="text-xs text-zinc-400">
-                {lang === 'zh' ? '设置在具体每个预约开始前多久发出提醒' : 'Configure how long before an appointment starts to remind you'}
+                {lang === 'zh' ? '在每个预约到达前通过精确闹钟强行弹出通知，即使关闭 App 或手机处于锁屏' : 'Schedules an individual AlarmManager wakeup before each appointment'}
               </p>
             </div>
           </div>
@@ -504,7 +741,7 @@ export default function SettingsView({
                 </span>
                 <p className="text-zinc-400">
                   {lang === 'zh' 
-                    ? `若客户预约时间为 14:30，系统将在提前 ${exampleLeadMinutes} 分钟准时在手机发出专门提醒：“[客户姓名] 的预约即将开始”。`
+                    ? `若客户预约时间为 14:30，系统将在提前 ${exampleLeadMinutes} 分钟准时在手机发出独立锁屏强提醒：“[客户姓名] 的预约即将开始”。`
                     : `For a 14:30 appointment, you will receive a notification ${exampleLeadMinutes} minutes in advance.`}
                 </p>
               </div>
@@ -517,7 +754,7 @@ export default function SettingsView({
         )}
       </div>
 
-      {/* SECTION 3: 笔记页面 PROFILE PICTURE 照片设置 (NOTES PROFILE PICTURE) */}
+      {/* SECTION 4: 笔记页面 PROFILE PICTURE 照片设置 (NOTES PROFILE PICTURE) */}
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 shadow-sm">
         <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-3.5">
           <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
@@ -612,7 +849,7 @@ export default function SettingsView({
                 <button
                   type="button"
                   onClick={handleResetAvatar}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-rose-400 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-rose-400 rounded-xl text-xs font-semibold transition-all cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>{lang === 'zh' ? '恢复默认金色“王”徽章' : 'Reset to Default'}</span>

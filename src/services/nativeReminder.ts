@@ -8,6 +8,22 @@ export interface ReminderSettings {
   leadTimeMinutes: number; // e.g. 15, 30, 60, 120, 1440
 }
 
+export interface ScheduledReminderItem {
+  id: string;
+  timestamp: number;
+  title: string;
+  body: string;
+  extraData?: string;
+}
+
+export interface NativePermissionStatus {
+  hasNotificationPermission: boolean;
+  canScheduleExactAlarms: boolean;
+  isIgnoringBatteryOptimizations: boolean;
+  androidVersion: number;
+  isNative: boolean;
+}
+
 export interface NativeReminderPlugin {
   getReminderSettings(): Promise<{ 
     enabled: boolean; 
@@ -22,14 +38,44 @@ export interface NativeReminderPlugin {
     leadTimeEnabled?: boolean; 
     leadTimeMinutes?: number; 
   }): Promise<{ success: boolean; message: string }>;
-  syncAppointments(options: { appointments: AppointmentItem[] }): Promise<{ success: boolean; count: number }>;
+  syncAppointments(options: { appointments: AppointmentItem[] }): Promise<{ 
+    success: boolean; 
+    syncedCount: number; 
+    scheduledExactCount?: number 
+  }>;
+  scheduleReminder(options: {
+    id: string;
+    timestamp: number;
+    title: string;
+    body: string;
+    extraData?: string;
+  }): Promise<{ success: boolean; id: string; timestamp: number }>;
+  cancelReminder(options: { id: string }): Promise<{ success: boolean; id: string }>;
+  cancelAllReminders(): Promise<{ success: boolean }>;
+  getScheduledReminders(): Promise<{ reminders: ScheduledReminderItem[]; count: number }>;
+  scheduleTestReminder(options: { seconds: number }): Promise<{
+    success: boolean;
+    testId: string;
+    triggerAt: number;
+    seconds: number;
+    message: string;
+  }>;
+  triggerTestNotification(): Promise<{ success: boolean; message: string }>;
+  checkPermissions(): Promise<{
+    hasNotificationPermission: boolean;
+    canScheduleExactAlarms: boolean;
+    isIgnoringBatteryOptimizations: boolean;
+    androidVersion: number;
+  }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
-  triggerTestNotification(): Promise<{ success: boolean; message: string; count: number }>;
-  getNotificationLaunchData(): Promise<{ openAppointments?: boolean }>;
+  openNotificationSettings(): Promise<{ success: boolean }>;
+  openExactAlarmSettings(): Promise<{ success: boolean; message?: string }>;
+  openBatteryOptimizationSettings(): Promise<{ success: boolean }>;
+  getNotificationLaunchData(): Promise<{ openAppointments?: boolean; reminderId?: string }>;
 }
 
 // Register native plugin for Capacitor (matches AppointmentReminderPlugin on Android)
-const AppointmentReminder = registerPlugin<NativeReminderPlugin>('AppointmentReminder');
+export const AppointmentReminder = registerPlugin<NativeReminderPlugin>('AppointmentReminder');
 
 const STORAGE_KEY = 'archan_wang_appointment_reminder_settings';
 
@@ -49,6 +95,106 @@ export function isNativeReminderPluginAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Get real system permission statuses from Android Native
+ */
+export async function checkNativePermissions(): Promise<NativePermissionStatus> {
+  if (isNativeReminderPluginAvailable()) {
+    try {
+      const res = await AppointmentReminder.checkPermissions();
+      return {
+        hasNotificationPermission: res.hasNotificationPermission,
+        canScheduleExactAlarms: res.canScheduleExactAlarms,
+        isIgnoringBatteryOptimizations: res.isIgnoringBatteryOptimizations,
+        androidVersion: res.androidVersion,
+        isNative: true,
+      };
+    } catch (e) {
+      console.warn('[ReminderService] Error checking native permissions', e);
+    }
+  }
+
+  // Web fallback check
+  const hasWebNotification = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  return {
+    hasNotificationPermission: hasWebNotification,
+    canScheduleExactAlarms: true,
+    isIgnoringBatteryOptimizations: true,
+    androidVersion: 0,
+    isNative: false,
+  };
+}
+
+/**
+ * Request notification permission (Native Android 13+ POST_NOTIFICATIONS or Web Notification)
+ */
+export async function requestNotificationPermission(): Promise<{ granted: boolean }> {
+  if (isNativeReminderPluginAvailable()) {
+    try {
+      const res = await AppointmentReminder.requestNotificationPermission();
+      return { granted: !!res.granted };
+    } catch (err: any) {
+      console.warn('[ReminderService] Error requesting native permission', err);
+    }
+  }
+
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    try {
+      const perm = await Notification.requestPermission();
+      return { granted: perm === 'granted' };
+    } catch {
+      return { granted: true };
+    }
+  }
+
+  return { granted: true };
+}
+
+/**
+ * Open Android system app notification settings
+ */
+export async function openNativeNotificationSettings(): Promise<boolean> {
+  if (isNativeReminderPluginAvailable()) {
+    try {
+      const res = await AppointmentReminder.openNotificationSettings();
+      return !!res.success;
+    } catch (e) {
+      console.warn('[ReminderService] Failed to open notification settings', e);
+    }
+  }
+  return false;
+}
+
+/**
+ * Open Android 12+ system exact alarm settings
+ */
+export async function openNativeExactAlarmSettings(): Promise<boolean> {
+  if (isNativeReminderPluginAvailable()) {
+    try {
+      const res = await AppointmentReminder.openExactAlarmSettings();
+      return !!res.success;
+    } catch (e) {
+      console.warn('[ReminderService] Failed to open exact alarm settings', e);
+    }
+  }
+  return false;
+}
+
+/**
+ * Open Android battery optimization settings
+ */
+export async function openNativeBatteryOptimizationSettings(): Promise<boolean> {
+  if (isNativeReminderPluginAvailable()) {
+    try {
+      const res = await AppointmentReminder.openBatteryOptimizationSettings();
+      return !!res.success;
+    } catch (e) {
+      console.warn('[ReminderService] Failed to open battery settings', e);
+    }
+  }
+  return false;
 }
 
 /**
@@ -89,17 +235,6 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
   return DEFAULT_REMINDER_SETTINGS;
 }
 
-export interface ReminderTestResult {
-  success: boolean;
-  message: string;
-  isPluginMissing?: boolean;
-}
-
-export interface PermissionResult {
-  granted: boolean;
-  isPluginMissing?: boolean;
-}
-
 /**
  * Save reminder settings to both Native Android and localStorage
  */
@@ -125,7 +260,7 @@ export async function saveReminderSettings(settings: ReminderSettings): Promise<
 }
 
 /**
- * Synchronize appointments to Native Android SharedPreferences so background AlarmManager can read them
+ * Synchronize all appointments to Native Android AlarmManager & SharedPreferences
  */
 export async function syncAppointmentsToNative(appointments: AppointmentItem[]): Promise<void> {
   if (isNativeReminderPluginAvailable()) {
@@ -135,6 +270,110 @@ export async function syncAppointmentsToNative(appointments: AppointmentItem[]):
       console.warn('[ReminderService] Failed to sync appointments to native Android', err);
     }
   }
+}
+
+/**
+ * Calculate appointment reminder timestamp
+ */
+export function calculateAppointmentTimestamp(
+  apt: AppointmentItem,
+  leadTimeMinutes: number = 30
+): number | null {
+  if (!apt.date || apt.status !== 'Pending') return null;
+
+  try {
+    let dateStr = apt.date;
+    let timeStr = apt.time || '09:00';
+    const combined = `${dateStr}T${timeStr}:00`;
+    const aptDate = new Date(combined);
+    if (isNaN(aptDate.getTime())) return null;
+
+    let triggerMs = aptDate.getTime();
+    if (leadTimeMinutes > 0) {
+      triggerMs -= leadTimeMinutes * 60 * 1000;
+    }
+
+    return triggerMs;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Schedule or update an exact native alarm for a single appointment
+ */
+export async function scheduleAppointmentExactReminder(
+  apt: AppointmentItem,
+  settings?: ReminderSettings
+): Promise<boolean> {
+  if (!isNativeReminderPluginAvailable()) return false;
+
+  const currentSettings = settings || await getReminderSettings();
+  if (!currentSettings.enabled) {
+    await cancelAppointmentExactReminder(apt.id);
+    return false;
+  }
+
+  if (apt.status !== 'Pending') {
+    await cancelAppointmentExactReminder(apt.id);
+    return false;
+  }
+
+  const leadMinutes = currentSettings.leadTimeEnabled ? currentSettings.leadTimeMinutes : 0;
+  const triggerMs = calculateAppointmentTimestamp(apt, leadMinutes);
+
+  if (!triggerMs || triggerMs <= Date.now()) {
+    // Past or invalid
+    await cancelAppointmentExactReminder(apt.id);
+    return false;
+  }
+
+  try {
+    const title = `⏰ 预约提醒 (Appointment Reminder)`;
+    const body = `您与 ${apt.clientName || '客户'} 的预约将于 ${apt.time || '今日'} 进行 (${apt.services?.join('、') || '命理咨询'})`;
+    
+    const res = await AppointmentReminder.scheduleReminder({
+      id: apt.id,
+      timestamp: triggerMs,
+      title,
+      body,
+      extraData: JSON.stringify({ appointmentId: apt.id, date: apt.date, time: apt.time }),
+    });
+
+    return !!res.success;
+  } catch (err) {
+    console.warn('[ReminderService] Error scheduling native exact reminder', err);
+    return false;
+  }
+}
+
+/**
+ * Cancel an exact native alarm for an appointment
+ */
+export async function cancelAppointmentExactReminder(appointmentId: string): Promise<boolean> {
+  if (!isNativeReminderPluginAvailable()) return false;
+  try {
+    const res = await AppointmentReminder.cancelReminder({ id: appointmentId });
+    return !!res.success;
+  } catch (err) {
+    console.warn('[ReminderService] Error cancelling native exact reminder', err);
+    return false;
+  }
+}
+
+/**
+ * Get list of currently scheduled native alarms from Android AlarmManager
+ */
+export async function getNativeScheduledReminders(): Promise<ScheduledReminderItem[]> {
+  if (isNativeReminderPluginAvailable()) {
+    try {
+      const res = await AppointmentReminder.getScheduledReminders();
+      return res.reminders || [];
+    } catch (err) {
+      console.warn('[ReminderService] Error getting scheduled reminders', err);
+    }
+  }
+  return [];
 }
 
 /**
@@ -187,34 +426,55 @@ export function vibrateDevice(): void {
 }
 
 /**
- * Request notification permission (Android 13+ POST_NOTIFICATIONS or Web Notification)
+ * Schedule a 1-minute test reminder for testing lock screen and background wake-up
  */
-export async function requestNotificationPermission(): Promise<PermissionResult> {
-  if (Capacitor.isNativePlatform()) {
-    if (isNativeReminderPluginAvailable()) {
-      try {
-        const res = await AppointmentReminder.requestNotificationPermission();
-        return { granted: !!res.granted };
-      } catch (err: any) {
-        console.warn('[ReminderService] Error requesting native permission', err);
-        return { granted: true };
-      }
-    } else {
-      // In-app notifications are enabled
-      return { granted: true };
-    }
-  }
+export async function scheduleOneMinuteTestReminder(
+  seconds: number = 60,
+  lang: AppLanguage = 'zh'
+): Promise<{ success: boolean; message: string; triggerAt: number }> {
+  playChimeSound();
+  vibrateDevice();
 
-  if (typeof window !== 'undefined' && 'Notification' in window) {
+  if (isNativeReminderPluginAvailable()) {
     try {
-      const perm = await Notification.requestPermission();
-      return { granted: perm === 'granted' };
-    } catch {
-      return { granted: true };
+      const res = await AppointmentReminder.scheduleTestReminder({ seconds });
+      return {
+        success: res.success,
+        message: lang === 'zh'
+          ? `⏰ 已成功向 Android 注册 ${seconds} 秒后精确闹钟！请现在关闭屏幕或锁定手机，系统将准时响铃、震动并点亮锁屏通知。`
+          : `⏰ Scheduled exact alarm for ${seconds}s from now! You can now turn off the screen or lock your phone.`,
+        triggerAt: res.triggerAt,
+      };
+    } catch (err: any) {
+      console.warn('[ReminderService] Native scheduleTestReminder failed', err);
     }
   }
 
-  return { granted: true };
+  // Web fallback simulation timer
+  const triggerAt = Date.now() + (seconds * 1000);
+  setTimeout(() => {
+    playChimeSound();
+    vibrateDevice();
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(lang === 'zh' ? '⏰ 1分钟测试提醒已到达' : '⏰ 1-Minute Test Reminder Fired', {
+        body: lang === 'zh' ? '这是一条网页倒计时测试提醒。' : 'This is a web simulated test notification.',
+        icon: '/favicon.ico',
+      });
+    }
+  }, seconds * 1000);
+
+  return {
+    success: true,
+    message: lang === 'zh'
+      ? `⏰ 已启动 ${seconds} 秒倒计时测试（由于当前不在 Android 原生环境，将使用计时器模拟）。`
+      : `⏰ Started ${seconds}s simulation test timer.`,
+    triggerAt,
+  };
+}
+
+export interface ReminderTestResult {
+  success: boolean;
+  message: string;
 }
 
 /**
@@ -235,7 +495,7 @@ export async function triggerTestReminder(
       const res = await AppointmentReminder.triggerTestNotification();
       return { success: res.success, message: res.message };
     } catch (err: any) {
-      console.warn('[ReminderService] Native plugin call failed, using in-app alert', err);
+      console.warn('[ReminderService] Native plugin call failed, using fallback', err);
     }
   }
 

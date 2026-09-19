@@ -13,12 +13,14 @@ public class AppointmentBootReceiver extends BroadcastReceiver {
         if (context == null || intent == null) return;
 
         String action = intent.getAction();
-        Log.i(TAG, "Device rebooted or package replaced: " + action + ". Rescheduling appointment reminder alarm...");
+        Log.i(TAG, "Device reboot or package update detected: " + action);
 
         if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                 || "android.intent.action.QUICKBOOT_POWERON".equals(action)
+                || "com.htc.intent.action.QUICKBOOT_POWERON".equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-            AppointmentReminderScheduler.scheduleDailyReminder(context);
+            Log.i(TAG, "Restoring all pending exact alarms and daily reminders from persistent storage...");
+            AppointmentReminderScheduler.restoreAllScheduledReminders(context);
         }
     }
 }

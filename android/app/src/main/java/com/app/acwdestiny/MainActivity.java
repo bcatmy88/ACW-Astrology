@@ -11,9 +11,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppointmentReminderPlugin.class);
         super.onCreate(savedInstanceState);
 
-        // Ensure notification channel is registered and initial schedule is active
+        // Ensure notification channel is registered and scheduled alarms are active
         AppointmentReminderScheduler.createNotificationChannel(this);
-        AppointmentReminderScheduler.scheduleDailyReminder(this);
+        AppointmentReminderScheduler.restoreAllScheduledReminders(this);
 
         handleNotificationIntent(getIntent());
     }

@@ -51,7 +51,7 @@ import AppointmentsView from './components/AppointmentsView';
 import SettingsView from './components/SettingsView';
 import LanguageToggle from './components/LanguageToggle';
 import NotificationModal from './components/NotificationModal';
-import { syncAppointmentsToNative, checkNotificationLaunch } from './services/nativeReminder';
+import { syncAppointmentsToNative, checkNotificationLaunch, scheduleAppointmentExactReminder, cancelAppointmentExactReminder } from './services/nativeReminder';
 
 // --- Types ---
 interface BaziData {
@@ -541,6 +541,7 @@ export default function App() {
       localStorage.setItem('archan_wang_appointments', JSON.stringify(updated));
       return updated;
     });
+    scheduleAppointmentExactReminder(aptItem);
   };
 
   const handleDeleteAppointment = (aptId: string) => {
@@ -549,6 +550,7 @@ export default function App() {
       localStorage.setItem('archan_wang_appointments', JSON.stringify(updated));
       return updated;
     });
+    cancelAppointmentExactReminder(aptId);
   };
 
   const handleRestoreData = (backup: BackupData, mode: 'overwrite' | 'merge') => {
