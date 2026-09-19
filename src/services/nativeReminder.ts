@@ -41,11 +41,22 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
 };
 
 /**
+ * Check if running in a native Android/Capacitor environment with the compiled AppointmentReminder plugin
+ */
+export function isNativeReminderPluginAvailable(): boolean {
+  try {
+    return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('AppointmentReminder');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get stored reminder settings (from Native Android if running in Capacitor, or localStorage fallback)
  */
 export async function getReminderSettings(): Promise<ReminderSettings> {
   try {
-    if (Capacitor.isNativePlatform()) {
+    if (isNativeReminderPluginAvailable()) {
       const res = await AppointmentReminder.getReminderSettings();
       if (res && typeof res.enabled === 'boolean') {
         return {
@@ -78,13 +89,24 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
   return DEFAULT_REMINDER_SETTINGS;
 }
 
+export interface ReminderTestResult {
+  success: boolean;
+  message: string;
+  isPluginMissing?: boolean;
+}
+
+export interface PermissionResult {
+  granted: boolean;
+  isPluginMissing?: boolean;
+}
+
 /**
  * Save reminder settings to both Native Android and localStorage
  */
 export async function saveReminderSettings(settings: ReminderSettings): Promise<boolean> {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 
-  if (Capacitor.isNativePlatform()) {
+  if (isNativeReminderPluginAvailable()) {
     try {
       const res = await AppointmentReminder.setReminderSettings({
         enabled: settings.enabled,
@@ -94,7 +116,7 @@ export async function saveReminderSettings(settings: ReminderSettings): Promise<
       });
       return res.success;
     } catch (err) {
-      console.error('[ReminderService] Error saving settings to native plugin', err);
+      console.warn('[ReminderService] Error saving settings to native plugin', err);
       return false;
     }
   }
@@ -106,11 +128,11 @@ export async function saveReminderSettings(settings: ReminderSettings): Promise<
  * Synchronize appointments to Native Android SharedPreferences so background AlarmManager can read them
  */
 export async function syncAppointmentsToNative(appointments: AppointmentItem[]): Promise<void> {
-  if (Capacitor.isNativePlatform()) {
+  if (isNativeReminderPluginAvailable()) {
     try {
       await AppointmentReminder.syncAppointments({ appointments });
     } catch (err) {
-      console.error('[ReminderService] Failed to sync appointments to native Android', err);
+      console.warn('[ReminderService] Failed to sync appointments to native Android', err);
     }
   }
 }
@@ -118,27 +140,36 @@ export async function syncAppointmentsToNative(appointments: AppointmentItem[]):
 /**
  * Request notification permission (Android 13+ POST_NOTIFICATIONS or Web Notification)
  */
-export async function requestNotificationPermission(): Promise<boolean> {
+export async function requestNotificationPermission(): Promise<PermissionResult> {
   if (Capacitor.isNativePlatform()) {
-    try {
-      const res = await AppointmentReminder.requestNotificationPermission();
-      return res.granted;
-    } catch (err) {
-      console.error('[ReminderService] Error requesting native permission', err);
-      return false;
+    if (isNativeReminderPluginAvailable()) {
+      try {
+        const res = await AppointmentReminder.requestNotificationPermission();
+        return { granted: !!res.granted };
+      } catch (err: any) {
+        console.warn('[ReminderService] Error requesting native permission', err);
+        const msg = String(err?.message || '');
+        return { 
+          granted: false, 
+          isPluginMissing: msg.toLowerCase().includes('not implemented')
+        };
+      }
+    } else {
+      // Installed APK does not have the native Java plugin compiled in yet
+      return { granted: false, isPluginMissing: true };
     }
   }
 
   if (typeof window !== 'undefined' && 'Notification' in window) {
     try {
       const perm = await Notification.requestPermission();
-      return perm === 'granted';
+      return { granted: perm === 'granted' };
     } catch {
-      return false;
+      return { granted: false };
     }
   }
 
-  return false;
+  return { granted: false };
 }
 
 /**
@@ -147,23 +178,45 @@ export async function requestNotificationPermission(): Promise<boolean> {
 export async function triggerTestReminder(
   todayAppointments: AppointmentItem[],
   lang: AppLanguage = 'zh'
-): Promise<{ success: boolean; message: string }> {
-  if (Capacitor.isNativePlatform()) {
+): Promise<ReminderTestResult> {
+  // If native Android plugin is compiled and available in this APK
+  if (isNativeReminderPluginAvailable()) {
     try {
       // First sync current appointments to ensure native storage has them
       await AppointmentReminder.syncAppointments({ appointments: todayAppointments });
       const res = await AppointmentReminder.triggerTestNotification();
       return { success: res.success, message: res.message };
     } catch (err: any) {
-      return { success: false, message: err?.message || 'Native notification error' };
+      const msg = String(err?.message || '');
+      if (msg.toLowerCase().includes('not implemented')) {
+        return {
+          success: false,
+          isPluginMissing: true,
+          message: lang === 'zh'
+            ? '当前手机安装的 APK 尚未编译原生提醒插件。请重新打包安装最新版 APK 即可激活手机状态栏通知！'
+            : 'Installed APK lacks native reminder plugin. Please rebuild & reinstall APK.'
+        };
+      }
+      return { success: false, message: msg || 'Native notification error' };
     }
+  }
+
+  // If on native platform but the plugin was not compiled into this APK
+  if (Capacitor.isNativePlatform() && !isNativeReminderPluginAvailable()) {
+    return {
+      success: false,
+      isPluginMissing: true,
+      message: lang === 'zh'
+        ? '检测到手机上运行的是旧版 APK，尚未编译进最新的原生 Java 提醒插件与 POST_NOTIFICATIONS 权限。重新打包并安装最新 APK 即可恢复手机状态栏提醒！'
+        : 'The installed APK is an earlier build without the native reminder plugin or POST_NOTIFICATIONS permission. Please reinstall the updated APK.'
+    };
   }
 
   // Web fallback simulation
   if (typeof window !== 'undefined' && 'Notification' in window) {
     if (Notification.permission !== 'granted') {
-      const granted = await requestNotificationPermission();
-      if (!granted) {
+      const permRes = await requestNotificationPermission();
+      if (!permRes.granted) {
         return {
           success: false,
           message: lang === 'zh' ? '请先允许通知权限' : 'Please grant notification permission',
