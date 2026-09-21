@@ -1520,18 +1520,6 @@ export default function App() {
                       </div>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
-                      {client.phone && (
-                        <a
-                          href={buildWhatsAppUrl(client.phone, `您好 ${client.name}，我是王大师命理馆。`)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-[#25D366] hover:bg-emerald-500/10 rounded-xl transition-all active:scale-95 cursor-pointer"
-                          title="WhatsApp 联系客户"
-                        >
-                          <Phone className="w-4 h-4 text-emerald-400" />
-                        </a>
-                      )}
                       <button 
                         onClick={(e) => editClient(client, e)}
                         className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-gold hover:bg-zinc-800/80 rounded-xl transition-all active:scale-95 cursor-pointer"
