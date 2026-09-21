@@ -7,6 +7,7 @@ export interface SavedClient {
   latitude: number;
   longitude: number;
   gender: 'male' | 'female';
+  notes?: string;
   createdAt: any;
 }
 

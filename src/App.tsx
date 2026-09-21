@@ -39,7 +39,9 @@ import {
   CalendarDays,
   Database,
   Bell,
-  Loader2
+  Loader2,
+  FileText,
+  Check
 } from 'lucide-react';
 import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
@@ -414,6 +416,8 @@ export default function App() {
   const [clientName, setClientName] = useState('');
   const [clientCountryCode, setClientCountryCode] = useState('+60');
   const [clientPhone, setClientPhone] = useState('');
+  const [clientNotes, setClientNotes] = useState('');
+  const [notesSaveFeedback, setNotesSaveFeedback] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<'bazi' | 'numerology' | 'western' | 'houses'>('bazi');
@@ -665,7 +669,8 @@ export default function App() {
             birthTime: birthTime,
             latitude: latitude,
             longitude: longitude,
-            gender: gender === 1 ? 'male' : 'female' as 'male' | 'female',
+            gender: (gender === 1 ? 'male' : 'female') as 'male' | 'female',
+            notes: clientNotes.trim() ? clientNotes.trim() : undefined,
           };
           targetClient = u;
           return u;
@@ -684,6 +689,7 @@ export default function App() {
         latitude: latitude,
         longitude: longitude,
         gender: gender === 1 ? 'male' : 'female',
+        notes: clientNotes.trim() ? clientNotes.trim() : undefined,
         createdAt: Date.now(),
       };
       targetClient = newClient;
@@ -753,6 +759,7 @@ export default function App() {
     setClientName(client.name);
     setClientCountryCode(parsedPhone.countryCode);
     setClientPhone(parsedPhone.nationalNumber);
+    setClientNotes(client.notes || '');
     setBirthDate(client.birthDate);
     setBirthTime(client.birthTime);
     setLatitude(client.latitude || 3.1390);
@@ -777,6 +784,7 @@ export default function App() {
     setClientName(client.name);
     setClientCountryCode(parsedPhone.countryCode);
     setClientPhone(parsedPhone.nationalNumber);
+    setClientNotes(client.notes || '');
     setBirthDate(client.birthDate);
     setBirthTime(client.birthTime);
     setLatitude(client.latitude || 3.1390);
@@ -790,6 +798,7 @@ export default function App() {
     setClientName('');
     setClientCountryCode('+60');
     setClientPhone('');
+    setClientNotes('');
     setBirthDate('1990-05-20');
     setBirthTime('10:30');
     setLatitude(3.1390);
@@ -797,6 +806,20 @@ export default function App() {
     setGender(1);
     setEditingClientId(null);
     setView('form');
+  };
+
+  const handleQuickSaveNotes = () => {
+    if (!currentAnalysisClientId) return;
+    const trimmed = clientNotes.trim();
+    const updated = savedClients.map(c => {
+      if (c.id === currentAnalysisClientId) {
+        return { ...c, notes: trimmed ? trimmed : undefined };
+      }
+      return c;
+    });
+    saveToLocalStorage(updated);
+    setNotesSaveFeedback(true);
+    setTimeout(() => setNotesSaveFeedback(false), 2000);
   };
 
   const filteredClients = savedClients.filter(c => 
@@ -1553,6 +1576,12 @@ export default function App() {
                           <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-zinc-500 shrink-0" />{client.phone}</span>
                           <span className="flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5 text-zinc-500 shrink-0" />{client.birthDate}</span>
                         </div>
+                        {client.notes && (
+                          <div className="mt-1.5 text-[11px] text-zinc-300 bg-zinc-950/70 border border-zinc-800/80 px-2.5 py-1 rounded-lg flex items-center gap-1.5 max-w-full truncate">
+                            <FileText className="w-3 h-3 text-gold shrink-0" />
+                            <span className="truncate">{client.notes}</span>
+                          </div>
+                        )}
                       </div>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
@@ -1727,6 +1756,20 @@ export default function App() {
                   </div>
                 </div>
 
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-gold" />
+                    {lang === 'zh' ? '档案备注 / 问事记录 (Notes)' : 'Client Notes & Remarks'}
+                  </label>
+                  <textarea 
+                    rows={3}
+                    value={clientNotes} 
+                    onChange={(e) => setClientNotes(e.target.value)} 
+                    placeholder={lang === 'zh' ? "在此记录客户问事重点、注意事项、特别叮嘱或开运方案..." : "Record client consultation points, reminders, special notes..."}
+                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-gold focus:ring-0 transition-all font-sans resize-y min-h-[80px]" 
+                  />
+                </div>
+
                 <button 
                   onClick={handleSaveAndAnalyze}
                   disabled={isSaving}
@@ -1803,6 +1846,9 @@ export default function App() {
                       birthDate,
                       birthTime,
                       gender: gender === 1 ? 'male' : 'female',
+                      latitude,
+                      longitude,
+                      notes: clientNotes,
                       createdAt: Date.now()
                     };
                     setSharingClient(targetClient);
@@ -1847,56 +1893,51 @@ export default function App() {
                 <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">生日日期 (农历 Lunar)</span>
                 <span className="text-xs sm:text-sm font-semibold text-zinc-200 leading-snug break-words">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
               </div>
-            </div>
 
-            {/* 五行能量与胎元命宫身宫 */}
-            <div className="bg-zinc-900/60 border border-zinc-800 p-3.5 sm:p-4 rounded-2xl shadow-lg flex flex-col gap-3">
-              <span className="text-xs sm:text-sm font-black text-gold">五行能量</span>
-              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
-                {(['木', '火', '土', '金', '水'] as const).map((el) => {
-                  const count = elementsCount[el] || 0;
-                  const config = {
-                    '木': { text: '#34d399', bar: '#10b981' },
-                    '火': { text: '#f87171', bar: '#ef4444' },
-                    '土': { text: '#fbbf24', bar: '#f59e0b' },
-                    '金': { text: '#fde047', bar: '#d4af37' },
-                    '水': { text: '#38bdf8', bar: '#0ea5e9' },
-                  }[el];
-                  const percent = Math.min(100, Math.round((count / 8) * 100));
-                  return (
-                    <div 
-                      key={el} 
-                      className="p-2 sm:p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800/80 flex flex-col items-center justify-between gap-2 shadow-sm"
+              {/* 档案备注 / 问事记录 数据区域 */}
+              <div className="col-span-2 flex flex-col gap-1.5 pt-2.5 mt-0.5 border-t border-zinc-800/80 min-w-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] sm:text-xs text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-gold shrink-0" />
+                    {lang === 'zh' ? '档案备注 / 问事记录' : 'Notes & Remarks'}
+                  </span>
+                  {currentAnalysisClientId && (
+                    <button
+                      type="button"
+                      onClick={handleQuickSaveNotes}
+                      className={cn(
+                        "text-[10px] sm:text-xs flex items-center gap-1 px-2.5 py-0.5 rounded-lg border transition-all active:scale-95 cursor-pointer font-bold",
+                        notesSaveFeedback 
+                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400" 
+                          : "bg-zinc-800/90 hover:bg-zinc-700/90 text-zinc-300 hover:text-white border-zinc-700/60 shadow-sm"
+                      )}
                     >
-                      <div className="flex items-center justify-center gap-1.5 font-bold">
-                        <span className="text-xs sm:text-sm font-bold" style={{ color: config.text }}>{el}</span>
-                        <span className="text-white font-mono text-xs sm:text-sm font-bold">{count}</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full rounded-full transition-all duration-300" 
-                          style={{ width: `${percent}%`, backgroundColor: config.bar }} 
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* 胎元 命宫 身宫 */}
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="p-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 shadow-sm">
-                  <span className="text-zinc-400">胎元:</span>
-                  <span className="text-gold font-bold">{taiYuan}</span>
+                      {notesSaveFeedback ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>{lang === 'zh' ? '已保存' : 'Saved'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-3 h-3 text-gold" />
+                          <span>{lang === 'zh' ? '保存备注' : 'Save'}</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
-                <div className="p-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 shadow-sm">
-                  <span className="text-zinc-400">命宫:</span>
-                  <span className="text-gold font-bold">{mingGong}</span>
-                </div>
-                <div className="p-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 shadow-sm">
-                  <span className="text-zinc-400">身宫:</span>
-                  <span className="text-gold font-bold">{shenGong}</span>
-                </div>
+                <textarea
+                  value={clientNotes}
+                  onChange={(e) => setClientNotes(e.target.value)}
+                  onBlur={() => {
+                    if (currentAnalysisClientId) {
+                      handleQuickSaveNotes();
+                    }
+                  }}
+                  placeholder={lang === 'zh' ? "在此记录该客户的问事重点、注意事项、开运建议等..." : "Record client notes, reminders, advice..."}
+                  rows={2}
+                  className="w-full bg-black/50 border border-zinc-800/80 rounded-xl p-2.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-gold focus:ring-0 resize-y min-h-[52px] transition-all font-sans leading-relaxed shadow-inner"
+                />
               </div>
             </div>
 
@@ -2055,6 +2096,50 @@ export default function App() {
                       })}
                     </div>
                   ))}
+                </div>
+
+                {/* 五行能量与胎元命宫身宫 */}
+                <div className="bg-zinc-900/70 border border-zinc-800 p-2.5 sm:p-3 rounded-xl shadow-md flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="text-xs font-black text-gold">五行能量</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2.5 text-[10px] sm:text-xs">
+                      <span className="text-zinc-400">胎元: <b className="text-gold font-bold">{taiYuan}</b></span>
+                      <span className="text-zinc-700">|</span>
+                      <span className="text-zinc-400">命宫: <b className="text-gold font-bold">{mingGong}</b></span>
+                      <span className="text-zinc-700">|</span>
+                      <span className="text-zinc-400">身宫: <b className="text-gold font-bold">{shenGong}</b></span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+                    {(['木', '火', '土', '金', '水'] as const).map((el) => {
+                      const count = elementsCount[el] || 0;
+                      const config = {
+                        '木': { text: '#34d399', bar: '#10b981' },
+                        '火': { text: '#f87171', bar: '#ef4444' },
+                        '土': { text: '#fbbf24', bar: '#f59e0b' },
+                        '金': { text: '#fde047', bar: '#d4af37' },
+                        '水': { text: '#38bdf8', bar: '#0ea5e9' },
+                      }[el];
+                      const percent = Math.min(100, Math.round((count / 8) * 100));
+                      return (
+                        <div 
+                          key={el} 
+                          className="p-1 sm:p-1.5 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex flex-col items-center justify-between gap-1 shadow-sm"
+                        >
+                          <div className="flex items-center justify-center gap-1 font-bold">
+                            <span className="text-xs sm:text-sm font-bold" style={{ color: config.text }}>{el}</span>
+                            <span className="text-white font-mono text-xs font-bold">{count}</span>
+                          </div>
+                          <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full rounded-full transition-all duration-300" 
+                              style={{ width: `${percent}%`, backgroundColor: config.bar }} 
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Secondary Info Bar */}
