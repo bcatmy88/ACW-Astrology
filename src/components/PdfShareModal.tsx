@@ -20,7 +20,9 @@ import {
   Calendar,
   CheckCircle2,
   Compass,
-  Globe
+  Globe,
+  ExternalLink,
+  MessageCircle
 } from 'lucide-react';
 import { Solar, Lunar } from 'lunar-javascript';
 import * as Astronomy from 'astronomy-engine';
@@ -951,8 +953,12 @@ const JIE_QI_TERMS = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑'
 export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareModalProps) {
   const [activePreviewPage, setActivePreviewPage] = useState<1 | 2 | 3>(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatusText, setGenerationStatusText] = useState('');
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [showDownloadSuccessModal, setShowDownloadSuccessModal] = useState(false);
 
   const page1Ref = useRef<HTMLDivElement>(null);
   const page2Ref = useRef<HTMLDivElement>(null);
@@ -1305,13 +1311,18 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
   }, [client, age]);
 
   // 生成完整 3 页 PDF 逻辑
-  const handleGeneratePdf = async (): Promise<{ blob: Blob; file: File } | null> => {
+  const handleGeneratePdf = async (): Promise<{ blob: Blob; file: File; objUrl: string } | null> => {
     if (!page1Ref.current || !page2Ref.current || !page3Ref.current) return null;
     setIsGenerating(true);
+    setGenerationProgress(10);
+    setGenerationStatusText('正在准备排版引擎与图表渲染...');
 
     try {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 100));
 
+      setGenerationProgress(25);
+      setGenerationStatusText('正在渲染第 1 页：八字原局与流年排盘...');
+      await new Promise(r => setTimeout(r, 40));
       const page1Canvas = await html2canvas(page1Ref.current, {
         scale: 2,
         useCORS: true,
@@ -1320,6 +1331,9 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
         windowWidth: 794
       });
 
+      setGenerationProgress(55);
+      setGenerationStatusText('正在渲染第 2 页：数字学矩阵与命宫巡环...');
+      await new Promise(r => setTimeout(r, 40));
       const page2Canvas = await html2canvas(page2Ref.current, {
         scale: 2,
         useCORS: true,
@@ -1328,6 +1342,9 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
         windowWidth: 794
       });
 
+      setGenerationProgress(80);
+      setGenerationStatusText('正在渲染第 3 页：西洋占星全息星盘与相位...');
+      await new Promise(r => setTimeout(r, 40));
       const page3Canvas = await html2canvas(page3Ref.current, {
         scale: 2,
         useCORS: true,
@@ -1335,6 +1352,10 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
         logging: false,
         windowWidth: 794
       });
+
+      setGenerationProgress(92);
+      setGenerationStatusText('正在合成超高清 3 页 PDF 档案...');
+      await new Promise(r => setTimeout(r, 40));
 
       const imgData1 = page1Canvas.toDataURL('image/jpeg', 0.95);
       const imgData2 = page2Canvas.toDataURL('image/jpeg', 0.95);
@@ -1357,15 +1378,19 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
       doc.addPage();
       doc.addImage(imgData3, 'JPEG', 0, 0, 210, 297);
 
+      setGenerationProgress(100);
+      setGenerationStatusText('PDF 档案生成完成！');
+
       const blob = doc.output('blob');
       const filename = `${client.name}_命理档案.pdf`;
       const file = new File([blob], filename, { type: 'application/pdf' });
 
       setPdfBlob(blob);
+      setPdfFile(file);
       const objUrl = URL.createObjectURL(blob);
       setPdfUrl(objUrl);
 
-      return { blob, file };
+      return { blob, file, objUrl };
     } catch (err) {
       console.error('PDF generation error', err);
       return null;
@@ -1381,29 +1406,68 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
     };
   }, []);
 
-  // 纯粹下载 PDF 操作
+  // 下载 PDF 操作并在下载完成后弹出后续操作询问窗口
   const handleDownloadPdf = async () => {
-    if (pdfUrl) {
-      const a = document.createElement('a');
-      a.href = pdfUrl;
-      a.download = `${client.name}_命理档案.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return;
+    let targetUrl = pdfUrl;
+    let targetFile = pdfFile;
+
+    if (!targetUrl || !targetFile) {
+      const gen = await handleGeneratePdf();
+      if (gen) {
+        targetUrl = gen.objUrl;
+        targetFile = gen.file;
+      }
     }
 
-    const gen = await handleGeneratePdf();
-    if (gen) {
-      const url = URL.createObjectURL(gen.blob);
+    if (targetUrl) {
       const a = document.createElement('a');
-      a.href = url;
+      a.href = targetUrl;
       a.download = `${client.name}_命理档案.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      // 下载成功后弹出交互询问弹窗 (在本地打开 / 转发到 WhatsApp)
+      setShowDownloadSuccessModal(true);
     }
+  };
+
+  // 在本地直接打开/预览 PDF
+  const handleOpenLocalPdf = () => {
+    if (pdfUrl) {
+      window.open(pdfUrl, '_blank');
+    } else if (pdfBlob) {
+      const url = URL.createObjectURL(pdfBlob);
+      window.open(url, '_blank');
+    }
+  };
+
+  // 直接转发到 WhatsApp
+  const handleShareToWhatsApp = async () => {
+    const shareText = `您好 ${client.name}，这是为您整理的专属【命理全息档案】（包含八字原局与流年运势、数字命宫图、西洋占星星盘及完整相位分析）。\n\n📄 档案名称：${client.name}_命理档案.pdf\n📅 生成日期：${todayStr}\n✨ 祝您顺遂安康，吉祥如意！`;
+    
+    // 如果浏览器支持 Web Share API 分享文件（如移动端设备），优先调起原生分享
+    if (navigator.share && pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      try {
+        await navigator.share({
+          title: `${client.name}_命理档案.pdf`,
+          text: shareText,
+          files: [pdfFile],
+        });
+        return;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    // 默认或 PC 端直接打开 WhatsApp 发送界面
+    const rawPhone = client.phone || '';
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    const waUrl = cleanPhone 
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(shareText)}`
+      : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    
+    window.open(waUrl, '_blank');
   };
 
   if (!analysisData) return null;
@@ -1417,8 +1481,8 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4">
-      <div className="bg-zinc-950 border border-zinc-800 w-full max-w-4xl h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 py-6 sm:py-8 overflow-y-auto">
+      <div className="bg-zinc-950 border border-zinc-800 w-full max-w-4xl h-[82vh] sm:h-[86vh] max-h-[86vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 my-auto">
         
         {/* 顶部栏：响应式自适应字体，确保名字与标识不挤压、不折两行 */}
         <div className="px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between gap-2">
@@ -1455,7 +1519,7 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
               {isGenerating ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>生成中...</span>
+                  <span>生成中 ({generationProgress}%)...</span>
                 </>
               ) : (
                 <>
@@ -1514,7 +1578,50 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
         </div>
 
         {/* 预览展示区域 */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 bg-zinc-950">
+        <div className="relative flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 bg-zinc-950">
+          {/* PDF 生成中全屏遮罩及进度条 (Loading Bar) */}
+          {isGenerating && (
+            <div className="absolute inset-0 z-30 bg-zinc-950/85 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-in fade-in duration-200">
+              <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700/80 rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+                {/* 发光旋转图标 */}
+                <div className="relative">
+                  <div className="w-13 h-13 rounded-2xl bg-gold/15 border border-gold/40 flex items-center justify-center shadow-lg shadow-amber-500/10">
+                    <Loader2 className="w-6.5 h-6.5 text-gold animate-spin" />
+                  </div>
+                  <div className="absolute -inset-1 rounded-2xl bg-gold/20 blur-md -z-10 animate-pulse" />
+                </div>
+
+                <div className="flex flex-col gap-1 items-center">
+                  <h3 className="text-sm sm:text-base font-black text-white tracking-wide">
+                    正在生成 3 页高清 PDF 档案
+                  </h3>
+                  <p className="text-xs text-gold font-medium min-h-[18px]">
+                    {generationStatusText || '正在渲染排版数据...'}
+                  </p>
+                </div>
+
+                {/* 动态进度条 */}
+                <div className="w-full flex flex-col gap-1.5">
+                  <div className="w-full h-2.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-700/80 p-[1px]">
+                    <div 
+                      className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 rounded-full transition-all duration-300 ease-out shadow-sm"
+                      style={{ width: `${Math.max(8, generationProgress)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono px-0.5">
+                    <span className="text-zinc-400">正在排版渲染</span>
+                    <span className="text-gold font-bold">{generationProgress}%</span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950/70 border border-zinc-800 rounded-xl px-3 py-2 text-left w-full">
+                  <span className="text-gold font-bold">提示：</span>
+                  <span>包含八字运势、数字命宫与西洋占星 3 张全息高清图表，手机端正在高速计算与排版，请稍候...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="max-w-2xl mx-auto bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-xl">
             {activePreviewPage === 1 ? (
               /* 第一页：八字原局 + 当前流年排盘 */
@@ -1560,36 +1667,36 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                 </div>
 
                 {/* 核心：原局四柱 + 大运 + 流年 + 流月 粘贴排盘 */}
-                <div className="border border-zinc-800 rounded-lg overflow-hidden bg-black/40">
-                  <div className="px-3 py-1.5 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between">
+                <div className="border border-zinc-800 rounded-xl overflow-hidden bg-black/40 shadow-md">
+                  <div className="px-3.5 py-2 bg-zinc-900/90 border-b border-zinc-800 flex items-center justify-between">
                     <span className="text-xs font-black text-gold">八字排盘</span>
                     <span className="text-[10px] text-zinc-400 font-bold">当前流年</span>
                   </div>
 
-                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[10px] font-bold bg-zinc-900/50">
+                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[10px] font-bold bg-zinc-900/60">
                     {analysisData.pillars.map((p, i) => (
-                      <div key={i} className="py-1 border-r border-zinc-800 last:border-r-0 text-zinc-400">
+                      <div key={i} className="py-2 border-r border-zinc-800 last:border-r-0 text-zinc-400">
                         {p.label}
                       </div>
                     ))}
                   </div>
 
-                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[10px] font-mono text-zinc-300">
+                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[9px] font-mono text-zinc-400 bg-zinc-950/60">
                     {analysisData.pillars.map((p, i) => (
-                      <div key={i} className="py-1 border-r border-zinc-800 last:border-r-0">
+                      <div key={i} className="py-1.5 border-r border-zinc-800 last:border-r-0">
                         {p.ageYear}
                       </div>
                     ))}
                   </div>
 
                   {/* 天干 */}
-                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center">
+                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-900/40">
                     {analysisData.pillars.map((p, i) => (
-                      <div key={i} className="py-2 border-r border-zinc-800 last:border-r-0 flex flex-col items-center relative">
-                        <span className="text-base font-serif font-black" style={{ color: getBaziColorHex(p.gan) }}>
+                      <div key={i} className="py-3.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center justify-center">
+                        <span className="text-xl font-serif font-black" style={{ color: getBaziColorHex(p.gan) }}>
                           {p.gan}
                         </span>
-                        <span className="text-[9px] text-zinc-400 font-bold mt-0.5">
+                        <span className="text-[9px] text-zinc-300 font-bold mt-1.5 px-1.5 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/60">
                           {getShiShenShort(p.shiShen)}
                         </span>
                       </div>
@@ -1597,15 +1704,15 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                   </div>
 
                   {/* 地支 */}
-                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-950/40">
+                  <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-950/70">
                     {analysisData.pillars.map((p, i) => (
-                      <div key={i} className="py-2 border-r border-zinc-800 last:border-r-0 flex flex-col items-center">
-                        <span className="text-base font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
+                      <div key={i} className="py-3.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center justify-center">
+                        <span className="text-xl font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
                           {p.zhi}
                         </span>
-                        <div className="flex gap-0.5 mt-0.5">
+                        <div className="flex gap-1 mt-1.5">
                           {getShiShenFromZhi(analysisData.dayGan, p.zhi).slice(0, 2).map((s, idx) => (
-                            <span key={idx} className="text-[8px] text-zinc-500 font-bold">
+                            <span key={idx} className="text-[8px] text-zinc-400 font-bold px-1 py-0.5 rounded bg-zinc-900 border border-zinc-800">
                               {getShiShenShort(s)}
                             </span>
                           ))}
@@ -1615,9 +1722,9 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                   </div>
 
                   {/* 纳音 */}
-                  <div className="grid grid-cols-7 text-center text-[9px] text-zinc-400 bg-zinc-900/30">
+                  <div className="grid grid-cols-7 text-center text-[9px] text-zinc-400 bg-zinc-900/50">
                     {analysisData.pillars.map((p, i) => (
-                      <div key={i} className="py-1 border-r border-zinc-800 last:border-r-0 font-mono">
+                      <div key={i} className="py-1.5 border-r border-zinc-800 last:border-r-0 font-mono">
                         {p.naYin}
                       </div>
                     ))}
@@ -1625,14 +1732,14 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                 </div>
 
                 {/* 大运流年详细走势 */}
-                <div className="border border-zinc-800 rounded-lg p-2.5 bg-black/40 flex flex-col gap-2">
+                <div className="border border-zinc-800 rounded-xl p-3 bg-black/40 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-gold">大运流年</span>
                     <span className="text-[10px] text-zinc-400">{analysisData.currentYear}年走势</span>
                   </div>
 
                   {/* 大运列表 */}
-                  <div className="grid grid-cols-8 gap-1 text-center">
+                  <div className="grid grid-cols-8 gap-1.5 text-center">
                     {analysisData.daYunList.map((dy, idx) => {
                       const isActive = dy.getStartYear() === analysisData.currentDaYun.getStartYear();
                       const gan = dy.getGanZhi().substring(0, 1);
@@ -1640,12 +1747,12 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                       return (
                         <div 
                           key={idx} 
-                          className={`p-1 rounded border flex flex-col items-center ${
+                          className={`p-1.5 py-2 rounded-lg border flex flex-col items-center ${
                             isActive ? 'bg-gold/20 border-gold text-gold' : 'bg-zinc-900/60 border-zinc-800 text-zinc-400'
                           }`}
                         >
                           <span className="text-[8px] font-mono">{dy.getStartAge()}岁</span>
-                          <span className="text-xs font-bold font-serif my-0.5" style={{ color: getBaziColorHex(gan) }}>
+                          <span className="text-sm font-bold font-serif my-0.5" style={{ color: getBaziColorHex(gan) }}>
                             {gan}{zhi}
                           </span>
                           <span className="text-[8px] font-mono text-zinc-500">{dy.getStartYear()}</span>
@@ -1663,7 +1770,7 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                       return (
                         <div 
                           key={idx}
-                          className={`p-1 rounded border flex flex-col items-center ${
+                          className={`p-1 py-1.5 rounded border flex flex-col items-center ${
                             isCurrent ? 'bg-gold/25 border-gold shadow-sm' : 'bg-zinc-900/40 border-zinc-800'
                           }`}
                         >
@@ -1684,7 +1791,7 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                       const gan = ly.getGanZhi().substring(0, 1);
                       const zhi = ly.getGanZhi().substring(1, 2);
                       return (
-                        <div key={idx} className="p-0.5 rounded bg-zinc-950 border border-zinc-800/80 flex flex-col items-center">
+                        <div key={idx} className="p-1 rounded bg-zinc-950 border border-zinc-800/80 flex flex-col items-center">
                           <span className="text-[7px] text-zinc-500">{JIE_QI_TERMS[idx]}</span>
                           <span className="text-[10px] font-bold font-serif" style={{ color: getBaziColorHex(gan) }}>
                             {gan}{zhi}
@@ -1696,19 +1803,19 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                 </div>
 
                 {/* 五行能量分布 */}
-                <div className="border border-zinc-800 rounded-lg p-2.5 bg-black/40 flex flex-col gap-1.5">
+                <div className="border border-zinc-800 rounded-xl p-3 bg-black/40 flex flex-col gap-2">
                   <span className="text-xs font-black text-gold">五行能量</span>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-5 gap-2.5">
                     {Object.entries(analysisData.elementsCount).map(([el, count]) => {
                       const style = elemColors[el] || { bg: '#222', text: '#fff', bar: '#888' };
                       const percent = Math.min(100, Math.round((Number(count) / 8) * 100));
                       return (
-                        <div key={el} className="p-1.5 rounded bg-zinc-900/80 border border-zinc-800 flex flex-col gap-1">
+                        <div key={el} className="p-2 rounded-lg bg-zinc-900/80 border border-zinc-800 flex flex-col gap-1.5">
                           <div className="flex justify-between text-xs font-black">
                             <span style={{ color: style.text }}>{el}</span>
-                            <span className="text-zinc-300 font-mono text-[11px]">{count}</span>
+                            <span className="text-zinc-300 font-mono text-xs">{count}</span>
                           </div>
-                          <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: style.bar }} />
                           </div>
                         </div>
@@ -1717,14 +1824,14 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                   </div>
 
                   {/* 胎元 命宫 身宫 */}
-                  <div className="grid grid-cols-3 gap-1.5 text-center text-xs mt-1">
-                    <div className="p-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs mt-1">
+                    <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
                       胎元: <span className="text-gold font-bold">{analysisData.taiYuan}</span>
                     </div>
-                    <div className="p-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                    <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
                       命宫: <span className="text-gold font-bold">{analysisData.mingGong}</span>
                     </div>
-                    <div className="p-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                    <div className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
                       身宫: <span className="text-gold font-bold">{analysisData.shenGong}</span>
                     </div>
                   </div>
@@ -1862,6 +1969,88 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
       </div>
 
       {/* =========================================================================
+          下载成功后续操作弹出窗口 (在本地打开文件 / 转发到 WhatsApp)
+          ========================================================================= */}
+      {showDownloadSuccessModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-700/90 w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 relative">
+            <button
+              type="button"
+              onClick={() => setShowDownloadSuccessModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div className="pr-6">
+                <h3 className="text-base font-black text-white tracking-wide">PDF 档案下载成功！</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  已成功保存至您的本地设备
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-300 flex flex-col gap-2">
+              <div className="flex justify-between items-center text-zinc-400">
+                <span>文件名称</span>
+                <span className="text-gold font-mono font-medium truncate max-w-[220px]" title={`${client.name}_命理档案.pdf`}>
+                  {client.name}_命理档案.pdf
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-zinc-400">
+                <span>档案对象</span>
+                <span className="text-white font-bold">{client.name} ({client.gender === 'male' ? '乾造' : '坤造'} · {age}岁)</span>
+              </div>
+              <div className="flex justify-between items-center text-zinc-400">
+                <span>生成日期</span>
+                <span className="text-zinc-200 font-mono">{todayStr}</span>
+              </div>
+              {client.phone && (
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>联系电话</span>
+                  <span className="text-zinc-200 font-mono">{client.phone}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2.5 pt-1">
+              {/* 选项 1：在本地打开文件 */}
+              <button
+                type="button"
+                onClick={handleOpenLocalPdf}
+                className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-gold/70 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all shadow-md active:scale-98 cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4 text-gold" />
+                <span>在本地打开文件 (查看 PDF)</span>
+              </button>
+
+              {/* 选项 2：直接转发到 WhatsApp */}
+              <button
+                type="button"
+                onClick={handleShareToWhatsApp}
+                className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all shadow-lg shadow-emerald-950/40 active:scale-98 cursor-pointer"
+              >
+                <MessageCircle className="w-4.5 h-4.5 text-zinc-950 fill-zinc-950" />
+                <span>直接转发到 WhatsApp</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowDownloadSuccessModal(false)}
+              className="w-full py-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors text-center cursor-pointer"
+            >
+              完成并关闭
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
           离屏 A4 高清模板 (794px × 1123px)，专供 jsPDF / html2canvas 生成
           ========================================================================= */}
       
@@ -1948,201 +2137,204 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
           </div>
         </div>
 
-        {/* 模块一：八字原局 + 目前年份流年大运并列排盘 */}
-        <div 
-          style={{ backgroundColor: '#11131a', borderColor: '#2a2c36' }}
-          className="border rounded-xl p-3 flex flex-col gap-2 shadow-md"
-        >
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#d4af37]" />
-              <h2 className="text-xs font-black text-white">八字排盘</h2>
-            </div>
-            <span className="text-xs font-bold text-[#d4af37]">当前流年</span>
-          </div>
-
-          {/* 7 列排盘表：时柱、日柱、月柱、年柱、大运、流年、流月 */}
-          <div className="border border-zinc-800 rounded-lg overflow-hidden">
-            <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[10px] font-bold bg-zinc-900">
-              {analysisData.pillars.map((p, i) => (
-                <div key={i} className="py-1 border-r border-zinc-800 last:border-r-0 text-zinc-400">
-                  {p.label}
-                </div>
-              ))}
+        {/* 模块区域：八字排盘 + 大运流年 + 五行格局 */}
+        <div className="flex flex-col gap-3 my-2 justify-start">
+          {/* 模块一：八字原局 + 目前年份流年大运并列排盘 */}
+          <div 
+            style={{ backgroundColor: '#11131a', borderColor: '#2a2c36' }}
+            className="border rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-md"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#d4af37]" />
+                <h2 className="text-xs font-black text-white">八字排盘</h2>
+              </div>
+              <span className="text-xs font-bold text-[#d4af37]">当前流年</span>
             </div>
 
-            <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[9px] font-mono text-zinc-400 bg-zinc-950">
-              {analysisData.pillars.map((p, i) => (
-                <div key={i} className="py-1 border-r border-zinc-800 last:border-r-0">
-                  {p.ageYear}
-                </div>
-              ))}
-            </div>
-
-            {/* 天干 */}
-            <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-900/60">
-              {analysisData.pillars.map((p, i) => (
-                <div key={i} className="py-2.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center">
-                  <span className="text-xl font-serif font-black" style={{ color: getBaziColorHex(p.gan) }}>
-                    {p.gan}
-                  </span>
-                  <span className="text-[9px] text-zinc-400 font-bold mt-0.5">
-                    {getShiShenShort(p.shiShen)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* 地支 */}
-            <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-950">
-              {analysisData.pillars.map((p, i) => (
-                <div key={i} className="py-2.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center">
-                  <span className="text-xl font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
-                    {p.zhi}
-                  </span>
-                  <div className="flex gap-0.5 mt-0.5">
-                    {getShiShenFromZhi(analysisData.dayGan, p.zhi).slice(0, 2).map((s, idx) => (
-                      <span key={idx} className="text-[8px] text-zinc-500 font-bold">
-                        {getShiShenShort(s)}
-                      </span>
-                    ))}
+            {/* 7 列排盘表：时柱、日柱、月柱、年柱、大运、流年、流月 */}
+            <div className="border border-zinc-800 rounded-xl overflow-hidden shadow-sm">
+              <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[10px] font-bold bg-zinc-900/90">
+                {analysisData.pillars.map((p, i) => (
+                  <div key={i} className="py-2 border-r border-zinc-800 last:border-r-0 text-zinc-400">
+                    {p.label}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
-            {/* 纳音 */}
-            <div className="grid grid-cols-7 text-center text-[9px] text-zinc-400 bg-zinc-900/40">
-              {analysisData.pillars.map((p, i) => (
-                <div key={i} className="py-1 border-r border-zinc-800 last:border-r-0 font-mono">
-                  {p.naYin}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 模块二：大运与当前年份流年走势 */}
-        <div 
-          style={{ backgroundColor: '#11131a', borderColor: '#2a2c36' }}
-          className="border rounded-xl p-3 flex flex-col gap-2 shadow-md"
-        >
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#d4af37]" />
-              <h2 className="text-xs font-black text-white">大运流年</h2>
-            </div>
-            <span className="text-xs font-bold text-[#d4af37]">当前流年</span>
-          </div>
-
-          {/* 8 步大运 */}
-          <div className="grid grid-cols-8 gap-1.5 text-center">
-            {analysisData.daYunList.map((dy, idx) => {
-              const isActive = dy.getStartYear() === analysisData.currentDaYun.getStartYear();
-              const gan = dy.getGanZhi().substring(0, 1);
-              const zhi = dy.getGanZhi().substring(1, 2);
-              return (
-                <div 
-                  key={idx} 
-                  style={{
-                    backgroundColor: isActive ? 'rgba(212,175,55,0.2)' : '#181a24',
-                    borderColor: isActive ? '#d4af37' : '#2f3240'
-                  }}
-                  className="border p-1 rounded flex flex-col items-center"
-                >
-                  <span className="text-[8px] font-mono text-zinc-400">{dy.getStartAge()}岁</span>
-                  <span className="text-sm font-bold font-serif my-0.5" style={{ color: getBaziColorHex(gan) }}>
-                    {gan}{zhi}
-                  </span>
-                  <span className="text-[8px] font-mono text-zinc-500">{dy.getStartYear()}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 10 个流年 */}
-          <div className="grid grid-cols-10 gap-1 text-center mt-1">
-            {analysisData.liuNianList.map((ln, idx) => {
-              const isCurrent = ln.getYear() === analysisData.currentYear;
-              const gan = ln.getGanZhi().substring(0, 1);
-              const zhi = ln.getGanZhi().substring(1, 2);
-              return (
-                <div 
-                  key={idx}
-                  style={{
-                    backgroundColor: isCurrent ? 'rgba(212,175,55,0.25)' : '#161822',
-                    borderColor: isCurrent ? '#d4af37' : '#27272a'
-                  }}
-                  className="border p-1 rounded flex flex-col items-center"
-                >
-                  <span className={`text-[8px] font-mono ${isCurrent ? 'text-white font-bold' : 'text-zinc-500'}`}>
-                    {ln.getYear()}
-                  </span>
-                  <span className="text-xs font-bold font-serif" style={{ color: getBaziColorHex(gan) }}>
-                    {gan}{zhi}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 12 流月节气 */}
-          <div className="grid grid-cols-12 gap-0.5 text-center mt-0.5">
-            {analysisData.liuYueList.map((ly, idx) => {
-              const gan = ly.getGanZhi().substring(0, 1);
-              const zhi = ly.getGanZhi().substring(1, 2);
-              return (
-                <div key={idx} className="p-0.5 rounded bg-zinc-950 border border-zinc-800 flex flex-col items-center">
-                  <span className="text-[7px] text-zinc-500">{JIE_QI_TERMS[idx]}</span>
-                  <span className="text-[9px] font-bold font-serif" style={{ color: getBaziColorHex(gan) }}>
-                    {gan}{zhi}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 模块三：五行能量与胎元命宫身宫 */}
-        <div 
-          style={{ backgroundColor: '#11131a', borderColor: '#2a2c36' }}
-          className="border rounded-xl p-3 flex flex-col gap-2 shadow-md"
-        >
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#d4af37]" />
-              <h2 className="text-xs font-black text-white">五行能量</h2>
-            </div>
-            <span className="text-xs font-bold text-[#d4af37]">原局格局</span>
-          </div>
-
-          <div className="grid grid-cols-5 gap-2.5">
-            {Object.entries(analysisData.elementsCount).map(([el, count]) => {
-              const style = elemColors[el] || { bg: '#222', text: '#fff', bar: '#888' };
-              const percent = Math.min(100, Math.round((Number(count) / 8) * 100));
-              return (
-                <div key={el} className="flex flex-col gap-1 p-2 rounded bg-black/40 border border-zinc-800">
-                  <div className="flex items-center justify-between text-xs font-black">
-                    <span style={{ color: style.text }}>{el}</span>
-                    <span className="text-white font-mono">{count}</span>
+              <div className="grid grid-cols-7 border-b border-zinc-800 text-center text-[9px] font-mono text-zinc-400 bg-zinc-950">
+                {analysisData.pillars.map((p, i) => (
+                  <div key={i} className="py-1.5 border-r border-zinc-800 last:border-r-0">
+                    {p.ageYear}
                   </div>
-                  <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: style.bar }} />
+                ))}
+              </div>
+
+              {/* 天干 */}
+              <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-900/40">
+                {analysisData.pillars.map((p, i) => (
+                  <div key={i} className="py-3.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-serif font-black" style={{ color: getBaziColorHex(p.gan) }}>
+                      {p.gan}
+                    </span>
+                    <span className="text-[10px] text-zinc-300 font-bold mt-1.5 px-2 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/60">
+                      {getShiShenShort(p.shiShen)}
+                    </span>
                   </div>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+
+              {/* 地支 */}
+              <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-950/70">
+                {analysisData.pillars.map((p, i) => (
+                  <div key={i} className="py-3.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
+                      {p.zhi}
+                    </span>
+                    <div className="flex gap-1 mt-1.5">
+                      {getShiShenFromZhi(analysisData.dayGan, p.zhi).slice(0, 2).map((s, idx) => (
+                        <span key={idx} className="text-[8px] text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                          {getShiShenShort(s)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 纳音 */}
+              <div className="grid grid-cols-7 text-center text-[9px] text-zinc-400 bg-zinc-900/50">
+                {analysisData.pillars.map((p, i) => (
+                  <div key={i} className="py-1.5 border-r border-zinc-800 last:border-r-0 font-mono">
+                    {p.naYin}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center text-xs mt-1">
-            <div className="p-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-              胎元: <span className="text-[#d4af37] font-bold">{analysisData.taiYuan}</span>
+          {/* 模块二：大运与当前年份流年走势 */}
+          <div 
+            style={{ backgroundColor: '#11131a', borderColor: '#2a2c36' }}
+            className="border rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-md"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#d4af37]" />
+                <h2 className="text-xs font-black text-white">大运流年</h2>
+              </div>
+              <span className="text-xs font-bold text-[#d4af37]">当前流年</span>
             </div>
-            <div className="p-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-              命宫: <span className="text-[#d4af37] font-bold">{analysisData.mingGong}</span>
+
+            {/* 8 步大运 */}
+            <div className="grid grid-cols-8 gap-1.5 text-center">
+              {analysisData.daYunList.map((dy, idx) => {
+                const isActive = dy.getStartYear() === analysisData.currentDaYun.getStartYear();
+                const gan = dy.getGanZhi().substring(0, 1);
+                const zhi = dy.getGanZhi().substring(1, 2);
+                return (
+                  <div 
+                    key={idx} 
+                    style={{
+                      backgroundColor: isActive ? 'rgba(212,175,55,0.2)' : '#181a24',
+                      borderColor: isActive ? '#d4af37' : '#2f3240'
+                    }}
+                    className="border p-1.5 py-2 rounded-lg flex flex-col items-center shadow-sm"
+                  >
+                    <span className="text-[8px] font-mono text-zinc-400">{dy.getStartAge()}岁</span>
+                    <span className="text-sm font-bold font-serif my-0.5" style={{ color: getBaziColorHex(gan) }}>
+                      {gan}{zhi}
+                    </span>
+                    <span className="text-[8px] font-mono text-zinc-500">{dy.getStartYear()}</span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="p-1.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
-              身宫: <span className="text-[#d4af37] font-bold">{analysisData.shenGong}</span>
+
+            {/* 10 个流年 */}
+            <div className="grid grid-cols-10 gap-1 text-center mt-0.5">
+              {analysisData.liuNianList.map((ln, idx) => {
+                const isCurrent = ln.getYear() === analysisData.currentYear;
+                const gan = ln.getGanZhi().substring(0, 1);
+                const zhi = ln.getGanZhi().substring(1, 2);
+                return (
+                  <div 
+                    key={idx}
+                    style={{
+                      backgroundColor: isCurrent ? 'rgba(212,175,55,0.25)' : '#161822',
+                      borderColor: isCurrent ? '#d4af37' : '#27272a'
+                    }}
+                    className="border p-1 py-1.5 rounded flex flex-col items-center"
+                  >
+                    <span className={`text-[8px] font-mono ${isCurrent ? 'text-white font-bold' : 'text-zinc-500'}`}>
+                      {ln.getYear()}
+                    </span>
+                    <span className="text-xs font-bold font-serif" style={{ color: getBaziColorHex(gan) }}>
+                      {gan}{zhi}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 12 流月节气 */}
+            <div className="grid grid-cols-12 gap-0.5 text-center mt-0.5">
+              {analysisData.liuYueList.map((ly, idx) => {
+                const gan = ly.getGanZhi().substring(0, 1);
+                const zhi = ly.getGanZhi().substring(1, 2);
+                return (
+                  <div key={idx} className="p-1 rounded bg-zinc-950 border border-zinc-800 flex flex-col items-center">
+                    <span className="text-[7px] text-zinc-500">{JIE_QI_TERMS[idx]}</span>
+                    <span className="text-[10px] font-bold font-serif" style={{ color: getBaziColorHex(gan) }}>
+                      {gan}{zhi}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 模块三：五行能量与胎元命宫身宫 */}
+          <div 
+            style={{ backgroundColor: '#11131a', borderColor: '#2a2c36' }}
+            className="border rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-md"
+          >
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#d4af37]" />
+                <h2 className="text-xs font-black text-white">五行能量</h2>
+              </div>
+              <span className="text-xs font-bold text-[#d4af37]">原局格局</span>
+            </div>
+
+            <div className="grid grid-cols-5 gap-2.5">
+              {Object.entries(analysisData.elementsCount).map(([el, count]) => {
+                const style = elemColors[el] || { bg: '#222', text: '#fff', bar: '#888' };
+                const percent = Math.min(100, Math.round((Number(count) / 8) * 100));
+                return (
+                  <div key={el} className="flex flex-col gap-1.5 p-2 rounded-lg bg-black/40 border border-zinc-800">
+                    <div className="flex items-center justify-between text-xs font-black">
+                      <span style={{ color: style.text }}>{el}</span>
+                      <span className="text-white font-mono">{count}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: style.bar }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center text-xs mt-1">
+              <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
+                胎元: <span className="text-[#d4af37] font-bold">{analysisData.taiYuan}</span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
+                命宫: <span className="text-[#d4af37] font-bold">{analysisData.mingGong}</span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
+                身宫: <span className="text-[#d4af37] font-bold">{analysisData.shenGong}</span>
+              </div>
             </div>
           </div>
         </div>

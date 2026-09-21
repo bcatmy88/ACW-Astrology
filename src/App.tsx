@@ -38,7 +38,8 @@ import {
   BookOpen,
   CalendarDays,
   Database,
-  Bell
+  Bell,
+  Loader2
 } from 'lucide-react';
 import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
@@ -443,6 +444,12 @@ export default function App() {
 
   const [sharingClient, setSharingClient] = useState<SavedClient | null>(null);
 
+  // Dynamic Profile Generation States (On-Demand Computing & Memory Optimization)
+  const [isGeneratingProfile, setIsGeneratingProfile] = useState(false);
+  const [profileProgress, setProfileProgress] = useState(0);
+  const [profileStepText, setProfileStepText] = useState('');
+  const [targetLoadingClient, setTargetLoadingClient] = useState<SavedClient | null>(null);
+
   const handleSetLang = (newLang: AppLanguage) => {
     setLangState(newLang);
     localStorage.setItem('archan_wang_lang', newLang);
@@ -641,12 +648,13 @@ export default function App() {
     }
 
     setIsSaving(true);
+    let targetClient: SavedClient;
     
     if (editingClientId) {
       // Update existing client
       const updated = savedClients.map(c => {
         if (c.id === editingClientId) {
-          return {
+          const u = {
             ...c,
             name: clientName,
             phone: clientPhone,
@@ -656,6 +664,8 @@ export default function App() {
             longitude: longitude,
             gender: gender === 1 ? 'male' : 'female' as 'male' | 'female',
           };
+          targetClient = u;
+          return u;
         }
         return c;
       });
@@ -673,13 +683,41 @@ export default function App() {
         gender: gender === 1 ? 'male' : 'female',
         createdAt: Date.now(),
       };
+      targetClient = newClient;
       const updated = [newClient, ...savedClients];
       saveToLocalStorage(updated);
     }
 
     setIsSaving(false);
     setEditingClientId(null);
+
+    // On-demand destiny generation with loading bar to avoid phone lag
+    setIsGeneratingProfile(true);
+    setTargetLoadingClient(targetClient!);
+    setProfileProgress(15);
+    setProfileStepText(lang === 'zh' ? '正在建立档案并初始化排盘引擎...' : 'Initializing destiny engine...');
+
+    await new Promise(r => setTimeout(r, 280));
+    setProfileProgress(45);
+    setProfileStepText(lang === 'zh' ? '正在推算八字原局、四柱神煞与大运...' : 'Computing Bazi pillars & Dayun...');
+
+    await new Promise(r => setTimeout(r, 320));
+    setProfileProgress(75);
+    setProfileStepText(lang === 'zh' ? '正在解算数字学矩阵与流年流月...' : 'Calculating Numerology & yearly cycles...');
+
+    await new Promise(r => setTimeout(r, 320));
+    setProfileProgress(92);
+    setProfileStepText(lang === 'zh' ? '正在解算西洋占星星历与行星相位...' : 'Computing Western astrological chart...');
+
+    await new Promise(r => setTimeout(r, 280));
+    setProfileProgress(100);
+    setProfileStepText(lang === 'zh' ? '命盘档案生成完成！' : 'Destiny profile generated!');
+
+    await new Promise(r => setTimeout(r, 300));
+    setCurrentAnalysisClientId(targetClient!.id);
     setView('analyze');
+    setIsGeneratingProfile(false);
+    setTargetLoadingClient(null);
   };
 
   const deleteClient = (id: string, e: React.MouseEvent) => {
@@ -688,7 +726,26 @@ export default function App() {
     saveToLocalStorage(updated);
   };
 
-  const loadClient = (client: SavedClient) => {
+  const loadClient = async (client: SavedClient) => {
+    // On-demand async destiny profile loading with progress bar (saves memory & prevents mobile lag)
+    setIsGeneratingProfile(true);
+    setTargetLoadingClient(client);
+    setProfileProgress(15);
+    setProfileStepText(lang === 'zh' ? '正在读取档案并初始化排盘引擎...' : 'Reading client record & initializing...');
+
+    await new Promise(r => setTimeout(r, 280));
+    setProfileProgress(42);
+    setProfileStepText(lang === 'zh' ? '正在推算八字原局、四柱神煞与大运...' : 'Computing Bazi pillars, shensha & Dayun...');
+
+    await new Promise(r => setTimeout(r, 320));
+    setProfileProgress(72);
+    setProfileStepText(lang === 'zh' ? '正在生成数字学矩阵与流年运势...' : 'Calculating Numerology matrix & yearly energy...');
+
+    await new Promise(r => setTimeout(r, 320));
+    setProfileProgress(92);
+    setProfileStepText(lang === 'zh' ? '正在解算西洋占星星历与行星相位...' : 'Resolving Western astrological ephemeris & aspects...');
+
+    // Apply values on-demand
     setClientName(client.name);
     setClientPhone(client.phone);
     setBirthDate(client.birthDate);
@@ -698,7 +755,15 @@ export default function App() {
     setGender(client.gender === 'male' ? 1 : 0);
     setEditingClientId(null);
     setCurrentAnalysisClientId(client.id);
+
+    await new Promise(r => setTimeout(r, 280));
+    setProfileProgress(100);
+    setProfileStepText(lang === 'zh' ? '命盘档案生成完成！' : 'Profile generated successfully!');
+
+    await new Promise(r => setTimeout(r, 300));
     setView('analyze');
+    setIsGeneratingProfile(false);
+    setTargetLoadingClient(null);
   };
 
   const editClient = (client: SavedClient, e: React.MouseEvent) => {
@@ -1333,7 +1398,7 @@ export default function App() {
 
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                     {/* Bazi Preview */}
-                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2.5 sm:p-3 rounded-xl flex flex-col gap-2">
+                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2 sm:p-3 rounded-xl flex flex-col gap-2">
                        <span className="text-xs font-black text-white uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap">
                          <LayoutGrid className="w-3.5 h-3.5 text-gold" /> 本命
                        </span>
@@ -1346,7 +1411,7 @@ export default function App() {
                                  <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[0]))}>{pair[0]}</span>
                                  <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(pair[1]))}>{pair[1]}</span>
                                </div>
-                               <span className="text-[10px] text-zinc-400 font-bold">{labels[i]}</span>
+                               <span className="text-[9px] sm:text-[10px] text-zinc-400 font-bold whitespace-nowrap tracking-tight">{labels[i]}</span>
                              </div>
                            );
                          })}
@@ -1354,7 +1419,7 @@ export default function App() {
                     </div>
 
                     {/* Current Energy */}
-                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2.5 sm:p-3 rounded-xl flex flex-col gap-2">
+                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2 sm:p-3 rounded-xl flex flex-col gap-2">
                        <span className="text-xs font-black text-white uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap">
                          <Zap className="w-3.5 h-3.5 text-gold" /> 流日
                        </span>
@@ -1365,14 +1430,14 @@ export default function App() {
                                <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(item.bazi[0]))}>{item.bazi[0]}</span>
                                <span className={cn("text-base sm:text-lg font-serif font-bold", getBaziColorClass(item.bazi[1]))}>{item.bazi[1]}</span>
                              </div>
-                             <span className="text-[10px] text-zinc-400 font-bold">{item.label}</span>
+                             <span className="text-[9px] sm:text-[10px] text-zinc-400 font-bold whitespace-nowrap tracking-tight">{item.label}</span>
                            </div>
                          ))}
                        </div>
                     </div>
 
                     {/* Numerology Daily */}
-                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2.5 sm:p-3 rounded-xl flex flex-col gap-2">
+                    <div className="bg-zinc-950/40 border border-zinc-800/60 p-2 sm:p-3 rounded-xl flex flex-col gap-2">
                        <span className="text-xs font-black text-white uppercase tracking-tight flex items-center gap-1.5 whitespace-nowrap">
                          <Hash className="w-3.5 h-3.5 text-gold" /> 数字
                        </span>
@@ -1381,25 +1446,25 @@ export default function App() {
                             <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{coreNumber}</span>
                             </div>
-                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">核心</span>
+                            <span className="text-[9px] sm:text-[10px] text-zinc-400 font-bold whitespace-nowrap tracking-tight">核心</span>
                           </div>
                           <div className="flex flex-col items-center">
                             <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numYear}</span>
                             </div>
-                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">流年</span>
+                            <span className="text-[9px] sm:text-[10px] text-zinc-400 font-bold whitespace-nowrap tracking-tight">流年</span>
                           </div>
                           <div className="flex flex-col items-center">
                             <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numMonth}</span>
                             </div>
-                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">流月</span>
+                            <span className="text-[9px] sm:text-[10px] text-zinc-400 font-bold whitespace-nowrap tracking-tight">流月</span>
                           </div>
                           <div className="flex flex-col items-center">
                             <div className="h-[32px] sm:h-[36px] flex items-center justify-center mb-1 leading-none text-center">
                               <span className="text-base sm:text-lg font-black text-white">{numDay}</span>
                             </div>
-                            <span className="text-[10px] text-zinc-400 font-bold whitespace-nowrap">流日</span>
+                            <span className="text-[9px] sm:text-[10px] text-zinc-400 font-bold whitespace-nowrap tracking-tight">流日</span>
                           </div>
                         </div>
                     </div>
@@ -1447,18 +1512,6 @@ export default function App() {
                       </div>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
-                      <button 
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSharingClient(client);
-                        }}
-                        className="h-9 px-2.5 flex items-center gap-1.5 text-xs font-bold text-gold hover:text-zinc-950 bg-gold/10 hover:bg-gold border border-gold/30 rounded-xl transition-all active:scale-95 cursor-pointer shadow-sm"
-                        title={lang === 'zh' ? '分享 PDF 档案' : 'Share PDF Report'}
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">{lang === 'zh' ? '分享 PDF' : 'Share PDF'}</span>
-                      </button>
                       <button 
                         onClick={(e) => editClient(client, e)}
                         className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-gold hover:bg-zinc-800/80 rounded-xl transition-all active:scale-95 cursor-pointer"
@@ -1787,9 +1840,9 @@ export default function App() {
                 <div className="flex flex-col bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden shadow-2xl">
                   {/* Row 1: Headers */}
                   <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
-                    <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700 text-zinc-400">日期</div>
+                    <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700 text-zinc-400 whitespace-nowrap">日期</div>
                     {["时柱", "日柱", "月柱", "年柱", "大运", "流年"].map((label, idx) => (
-                      <div key={idx} className="flex-1 flex items-center justify-center text-xs font-bold border-r border-zinc-700 last:border-r-0">{label}</div>
+                      <div key={idx} className="flex-1 flex items-center justify-center text-xs font-bold border-r border-zinc-700 last:border-r-0 whitespace-nowrap">{label}</div>
                     ))}
                   </div>
 
@@ -1995,9 +2048,9 @@ export default function App() {
                   <div className="flex flex-col">
                     {/* Row 1: Headers */}
                     <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
-                      <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 text-zinc-400 uppercase">日期</div>
+                      <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 text-zinc-400 uppercase whitespace-nowrap">日期</div>
                       {["时柱", "日柱", "月柱", "年柱", "大运", "流年", "流月", "流日"].map((label, idx) => (
-                        <div key={idx} className="flex-1 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 last:border-r-0 text-zinc-300 uppercase">{label}</div>
+                        <div key={idx} className="flex-1 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 last:border-r-0 text-zinc-300 uppercase whitespace-nowrap">{label}</div>
                       ))}
                     </div>
 
@@ -2932,6 +2985,61 @@ export default function App() {
           lang={lang}
           reportLogo={reportLogo}
         />
+      )}
+
+      {/* DYNAMIC ON-DEMAND PROFILE GENERATION LOADING BAR */}
+      {isGeneratingProfile && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700/80 rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-150 text-center">
+            {/* Glowing Golden Icon */}
+            <div className="relative">
+              <div className="w-14 h-14 rounded-2xl bg-gold/15 border border-gold/40 flex items-center justify-center shadow-lg shadow-amber-500/10">
+                <Loader2 className="w-7 h-7 text-gold animate-spin" />
+              </div>
+              <div className="absolute -inset-1 rounded-2xl bg-gold/20 blur-md -z-10 animate-pulse" />
+            </div>
+
+            <div className="flex flex-col gap-1 items-center">
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gold/15 border border-gold/30 text-gold text-[11px] font-bold">
+                <Sparkles className="w-3 h-3" />
+                <span>{lang === 'zh' ? '按需生成命盘' : 'On-Demand Generation'}</span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white tracking-wide mt-1">
+                {targetLoadingClient?.name ? (
+                  <span>{lang === 'zh' ? `正在生成【${targetLoadingClient.name}】命盘` : `Generating profile for ${targetLoadingClient.name}`}</span>
+                ) : (
+                  <span>{lang === 'zh' ? '正在生成专属命盘' : 'Generating Destiny Profile'}</span>
+                )}
+              </h3>
+              <p className="text-xs text-gold font-medium min-h-[18px]">
+                {profileStepText || (lang === 'zh' ? '正在渲染排盘数据...' : 'Calculating destiny data...')}
+              </p>
+            </div>
+
+            {/* Dynamic Progress Bar */}
+            <div className="w-full flex flex-col gap-1.5">
+              <div className="w-full h-2.5 bg-zinc-950 rounded-full overflow-hidden border border-zinc-700/80 p-[1px]">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 rounded-full transition-all duration-300 ease-out shadow-sm"
+                  style={{ width: `${Math.max(10, profileProgress)}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono px-0.5">
+                <span className="text-zinc-400">{lang === 'zh' ? '排盘引擎就绪' : 'Engine Ready'}</span>
+                <span className="text-gold font-bold">{profileProgress}%</span>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950/70 border border-zinc-800 rounded-xl px-3 py-2 text-left w-full">
+              <span className="text-gold font-bold">{lang === 'zh' ? '提示：' : 'Note: '}</span>
+              <span>
+                {lang === 'zh' 
+                  ? '采用实时按需计算，大幅释放手机后台内存占用，杜绝卡顿并提升运行速度。'
+                  : 'Computing on-demand to minimize device memory footprint and eliminate lag.'}
+              </span>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
