@@ -45,6 +45,7 @@ import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { SavedClient, CaseItem, NoteItem, AppointmentItem, BackupData, AppLanguage } from './types';
+import { COUNTRY_CODES, parsePhoneNumber, combinePhoneNumber, buildWhatsAppUrl } from './utils/phoneUtils';
 import PendingCasesView from './components/PendingCasesView';
 import NotesView from './components/NotesView';
 import BackupView from './components/BackupView';
@@ -411,6 +412,7 @@ export default function App() {
 
   // Client info state
   const [clientName, setClientName] = useState('');
+  const [clientCountryCode, setClientCountryCode] = useState('+60');
   const [clientPhone, setClientPhone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -648,6 +650,7 @@ export default function App() {
     }
 
     setIsSaving(true);
+    const formattedPhone = combinePhoneNumber(clientCountryCode, clientPhone);
     let targetClient: SavedClient;
     
     if (editingClientId) {
@@ -657,7 +660,7 @@ export default function App() {
           const u = {
             ...c,
             name: clientName,
-            phone: clientPhone,
+            phone: formattedPhone,
             birthDate: birthDate,
             birthTime: birthTime,
             latitude: latitude,
@@ -675,7 +678,7 @@ export default function App() {
       const newClient: SavedClient = {
         id: crypto.randomUUID(),
         name: clientName,
-        phone: clientPhone,
+        phone: formattedPhone,
         birthDate: birthDate,
         birthTime: birthTime,
         latitude: latitude,
@@ -745,9 +748,11 @@ export default function App() {
     setProfileProgress(92);
     setProfileStepText(lang === 'zh' ? '正在解算西洋占星星历与行星相位...' : 'Resolving Western astrological ephemeris & aspects...');
 
-    // Apply values on-demand
+    // Apply values on-demand with country code parsing
+    const parsedPhone = parsePhoneNumber(client.phone, '+60');
     setClientName(client.name);
-    setClientPhone(client.phone);
+    setClientCountryCode(parsedPhone.countryCode);
+    setClientPhone(parsedPhone.nationalNumber);
     setBirthDate(client.birthDate);
     setBirthTime(client.birthTime);
     setLatitude(client.latitude || 3.1390);
@@ -768,8 +773,10 @@ export default function App() {
 
   const editClient = (client: SavedClient, e: React.MouseEvent) => {
     e.stopPropagation();
+    const parsedPhone = parsePhoneNumber(client.phone, '+60');
     setClientName(client.name);
-    setClientPhone(client.phone);
+    setClientCountryCode(parsedPhone.countryCode);
+    setClientPhone(parsedPhone.nationalNumber);
     setBirthDate(client.birthDate);
     setBirthTime(client.birthTime);
     setLatitude(client.latitude || 3.1390);
@@ -781,6 +788,7 @@ export default function App() {
 
   const resetForm = () => {
     setClientName('');
+    setClientCountryCode('+60');
     setClientPhone('');
     setBirthDate('1990-05-20');
     setBirthTime('10:30');
@@ -1512,6 +1520,18 @@ export default function App() {
                       </div>
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
+                      {client.phone && (
+                        <a
+                          href={buildWhatsAppUrl(client.phone, `您好 ${client.name}，我是王大师命理馆。`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-[#25D366] hover:bg-emerald-500/10 rounded-xl transition-all active:scale-95 cursor-pointer"
+                          title="WhatsApp 联系客户"
+                        >
+                          <Phone className="w-4 h-4 text-emerald-400" />
+                        </a>
+                      )}
                       <button 
                         onClick={(e) => editClient(client, e)}
                         className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-gold hover:bg-zinc-800/80 rounded-xl transition-all active:scale-95 cursor-pointer"
@@ -1593,14 +1613,29 @@ export default function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">联系电话 (Phone)*</label>
-                  <input 
-                    type="tel" 
-                    placeholder="请输入电话号码"
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                    className="bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold"
-                  />
+                  <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">
+                    {lang === 'zh' ? '联系电话 (Phone)*' : 'Phone Number*'}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={clientCountryCode}
+                      onChange={(e) => setClientCountryCode(e.target.value)}
+                      className="bg-black border border-zinc-800 rounded-xl px-2.5 sm:px-3 py-3.5 text-xs sm:text-sm text-gold font-bold focus:border-gold focus:ring-0 transition-all cursor-pointer shrink-0 max-w-[135px] sm:max-w-[155px]"
+                    >
+                      {COUNTRY_CODES.map((item) => (
+                        <option key={item.code} value={item.code} className="bg-zinc-950 text-white">
+                          {item.flag} {item.code} ({lang === 'zh' ? item.nameZh : item.nameEn})
+                        </option>
+                      ))}
+                    </select>
+                    <input 
+                      type="tel" 
+                      placeholder={lang === 'zh' ? "输入电话（如 012-345 6789）" : "e.g. 123456789"}
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      className="flex-1 min-w-0 bg-black border border-zinc-800 rounded-xl px-4 py-3.5 text-base text-white focus:border-gold focus:ring-0 transition-all font-bold"
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-xs sm:text-sm font-bold text-zinc-400 ml-1 uppercase tracking-wider">出生日期 (Date)*</label>

@@ -25,6 +25,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import type { AppointmentItem, AppointmentStatus, SavedClient, AppLanguage, CaseItem } from '../types';
+import { buildWhatsAppUrl } from '../utils/phoneUtils';
 import LanguageToggle from './LanguageToggle';
 
 interface AppointmentsViewProps {
@@ -664,10 +665,16 @@ export default function AppointmentsView({
 
                       {/* Phone / Contact */}
                       {item.clientPhone && (
-                        <div className="flex items-center gap-1.5 text-xs sm:text-sm text-zinc-400 mt-0.5">
-                          <Phone className="w-3.5 h-3.5 text-zinc-500" />
+                        <a
+                          href={buildWhatsAppUrl(item.clientPhone, `您好 ${item.clientName}，关于您的预约安排：`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-xs sm:text-sm text-zinc-400 hover:text-emerald-400 transition-colors mt-0.5 w-fit underline-offset-2 hover:underline"
+                          title="WhatsApp 联系客户"
+                        >
+                          <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                           <span>{item.clientPhone}</span>
-                        </div>
+                        </a>
                       )}
                     </div>
                   </div>

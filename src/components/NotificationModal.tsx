@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { AppointmentItem, CaseItem, SavedClient, AppLanguage } from '../types';
+import { buildWhatsAppUrl } from '../utils/phoneUtils';
 
 interface NotificationModalProps {
   isOpen: boolean;
@@ -396,10 +397,16 @@ export default function NotificationModal({
                               {apt.clientName}
                             </span>
                             {apt.clientPhone && (
-                              <span className="text-xs text-zinc-400 shrink-0 flex items-center gap-1">
-                                <Phone className="w-3.5 h-3.5 text-zinc-500" />
-                                {apt.clientPhone}
-                              </span>
+                              <a
+                                href={buildWhatsAppUrl(apt.clientPhone, `您好 ${apt.clientName}，关于您的预约：`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-zinc-400 hover:text-emerald-400 shrink-0 flex items-center gap-1 transition-colors underline-offset-2 hover:underline"
+                                title="WhatsApp 联系客户"
+                              >
+                                <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>{apt.clientPhone}</span>
+                              </a>
                             )}
                           </div>
 
