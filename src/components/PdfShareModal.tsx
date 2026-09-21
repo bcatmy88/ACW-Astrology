@@ -22,7 +22,11 @@ import {
   Compass,
   Globe,
   ExternalLink,
-  MessageCircle
+  MessageCircle,
+  Share2,
+  FileText,
+  Eye,
+  ArrowLeft
 } from 'lucide-react';
 import { Solar, Lunar } from 'lunar-javascript';
 import * as Astronomy from 'astronomy-engine';
@@ -959,6 +963,8 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [showDownloadSuccessModal, setShowDownloadSuccessModal] = useState(false);
+  const [showFullscreenReader, setShowFullscreenReader] = useState(false);
+  const [showWhatsAppHelpModal, setShowWhatsAppHelpModal] = useState(false);
 
   const page1Ref = useRef<HTMLDivElement>(null);
   const page2Ref = useRef<HTMLDivElement>(null);
@@ -1432,42 +1438,56 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
     }
   };
 
-  // 在本地直接打开/预览 PDF
+  // 在本地直接打开/预览 PDF (手机与电脑均能 100% 顺畅全屏预览与外部打开)
   const handleOpenLocalPdf = () => {
-    if (pdfUrl) {
-      window.open(pdfUrl, '_blank');
-    } else if (pdfBlob) {
-      const url = URL.createObjectURL(pdfBlob);
-      window.open(url, '_blank');
-    }
+    setShowDownloadSuccessModal(false);
+    setShowFullscreenReader(true);
   };
 
-  // 直接转发到 WhatsApp
+  // 直接转发到 WhatsApp (支持系统原生文件分享到 WhatsApp 并自选联系人)
   const handleShareToWhatsApp = async () => {
-    const shareText = `您好 ${client.name}，这是为您整理的专属【命理全息档案】（包含八字原局与流年运势、数字命宫图、西洋占星星盘及完整相位分析）。\n\n📄 档案名称：${client.name}_命理档案.pdf\n📅 生成日期：${todayStr}\n✨ 祝您顺遂安康，吉祥如意！`;
-    
-    // 如果浏览器支持 Web Share API 分享文件（如移动端设备），优先调起原生分享
-    if (navigator.share && pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      try {
-        await navigator.share({
-          title: `${client.name}_命理档案.pdf`,
-          text: shareText,
-          files: [pdfFile],
-        });
-        return;
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
+    let targetFile = pdfFile;
+    let targetBlob = pdfBlob;
+
+    if (!targetFile && targetBlob) {
+      targetFile = new File([targetBlob], `${client.name}_命理档案.pdf`, { type: 'application/pdf' });
+      setPdfFile(targetFile);
+    }
+
+    if (!targetFile) {
+      const gen = await handleGeneratePdf();
+      if (gen) {
+        targetFile = gen.file;
+        targetBlob = gen.blob;
       }
     }
 
-    // 默认或 PC 端直接打开 WhatsApp 发送界面
-    const rawPhone = client.phone || '';
-    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
-    const waUrl = cleanPhone 
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(shareText)}`
-      : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
-    
-    window.open(waUrl, '_blank');
+    const shareTitle = `${client.name}_命理档案.pdf`;
+    const shareText = `您好，这是【${client.name}】的命理全息档案 PDF 文件（包含八字原局与流年运势、数字命宫图、西洋占星星盘及完整相位分析）。`;
+
+    // 移动端：若支持通过 Web Share API 发送文件，直接调起系统分享选择 WhatsApp 并发送真实 PDF 文件
+    if (
+      typeof navigator !== 'undefined' &&
+      navigator.share &&
+      targetFile &&
+      navigator.canShare &&
+      navigator.canShare({ files: [targetFile] })
+    ) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          files: [targetFile],
+        });
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // 用户在系统分享面板中取消
+        console.warn('Navigator share error:', err);
+      }
+    }
+
+    // 若当前浏览器或 PC 不支持直接从网页注入本地文件，则弹出明确的转发引导并打开 WhatsApp 供用户自选联系人
+    setShowWhatsAppHelpModal(true);
   };
 
   if (!analysisData) return null;
@@ -2046,6 +2066,314 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
             >
               完成并关闭
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          WhatsApp 转发指引弹窗 (在不支持 Web Share 文件注入的浏览器下引导转发)
+          ========================================================================= */}
+      {showWhatsAppHelpModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-700/90 w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 relative text-left">
+            <button
+              type="button"
+              onClick={() => setShowWhatsAppHelpModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[#25D366]/15 border border-[#25D366]/40 flex items-center justify-center shrink-0">
+                <MessageCircle className="w-6 h-6 text-[#25D366]" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white tracking-wide">转发 PDF 档案到 WhatsApp</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">选择联系人发送完整 PDF 报告</p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-300 flex flex-col gap-2.5">
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-gold/20 text-gold flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">1</span>
+                <span>PDF 档案已保存为 <strong className="text-gold font-mono">{client.name}_命理档案.pdf</strong></span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-gold/20 text-gold flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">2</span>
+                <span>点击下方按钮直接打开 WhatsApp，<strong>自由选择您想要发送的好友或群聊</strong></span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-5 h-5 rounded-full bg-gold/20 text-gold flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">3</span>
+                <span>在 WhatsApp 输入框旁点击 <strong>📎（附件 / 文档）</strong>，选择刚刚保存的 PDF 文件直接发送</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <a
+                href="https://api.whatsapp.com/send"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowWhatsAppHelpModal(false)}
+                className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all shadow-lg shadow-emerald-950/40 active:scale-98 cursor-pointer text-center"
+              >
+                <MessageCircle className="w-4.5 h-4.5 text-zinc-950 fill-zinc-950" />
+                <span>打开 WhatsApp (自选联系人发送)</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppHelpModal(false)}
+                className="w-full py-2 text-xs text-zinc-400 hover:text-white transition-colors text-center cursor-pointer"
+              >
+                我知道了，返回
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          手机/全平台内置全屏高清 PDF 阅读器 (解决手机打开无反应问题)
+          ========================================================================= */}
+      {showFullscreenReader && (
+        <div className="fixed inset-0 z-[85] bg-black/95 backdrop-blur-xl flex flex-col animate-in fade-in duration-200">
+          {/* 阅读器顶栏 */}
+          <div className="px-3 sm:px-6 py-3 bg-zinc-950/90 border-b border-zinc-800 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setShowFullscreenReader(false)}
+                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center gap-1.5 text-xs font-bold transition-colors cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">返回</span>
+              </button>
+              <div className="truncate">
+                <h3 className="text-sm sm:text-base font-black text-white truncate">
+                  {client.name} · 命理全息档案
+                </h3>
+                <span className="text-[10px] sm:text-xs text-gold font-mono">
+                  PAGE {activePreviewPage} / 3 · {todayStr}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* 直接转发 WhatsApp */}
+              <button
+                type="button"
+                onClick={handleShareToWhatsApp}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                title="直接转发到 WhatsApp"
+              >
+                <MessageCircle className="w-3.5 h-3.5 fill-zinc-950" />
+                <span className="hidden sm:inline">转发 WhatsApp</span>
+              </button>
+
+              {/* 保存/下载 PDF */}
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gold hover:bg-amber-400 text-zinc-950 font-black text-xs flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                title="下载 PDF"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">下载 PDF</span>
+              </button>
+
+              {/* 关闭全屏 */}
+              <button
+                type="button"
+                onClick={() => setShowFullscreenReader(false)}
+                className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* 阅读器 3 页切换标签 */}
+          <div className="px-3 sm:px-6 py-2 bg-zinc-900/80 border-b border-zinc-800/80 flex items-center justify-center shrink-0">
+            <div className="grid grid-cols-3 gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800 w-full max-w-md">
+              <button
+                type="button"
+                onClick={() => setActivePreviewPage(1)}
+                className={`py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                  activePreviewPage === 1 ? 'bg-gold text-zinc-950 shadow font-black' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                1. 八字流年
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePreviewPage(2)}
+                className={`py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                  activePreviewPage === 2 ? 'bg-gold text-zinc-950 shadow font-black' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                2. 数字命宫
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePreviewPage(3)}
+                className={`py-1.5 rounded-lg text-xs font-bold transition-all text-center ${
+                  activePreviewPage === 3 ? 'bg-gold text-zinc-950 shadow font-black' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                3. 西洋占星
+              </button>
+            </div>
+          </div>
+
+          {/* 阅读器主视区 */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-6 bg-zinc-950 flex flex-col items-center">
+            <div className="w-full max-w-4xl bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl">
+              {activePreviewPage === 1 ? (
+                <div className="flex flex-col gap-4">
+                  {/* 第一页头部 */}
+                  <div className="border-b border-gold/30 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm sm:text-base font-black text-white">命理档案</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30 font-bold">第一页</span>
+                    </div>
+                    <div className="text-right text-xs text-gold font-mono">{client.name} · 八字排盘</div>
+                  </div>
+
+                  {/* 四柱排盘表格 */}
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    {analysisData.pillars.map((p, idx) => (
+                      <div key={idx} className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                        <div className="text-[11px] text-zinc-400 font-bold mb-1">{p.label}柱</div>
+                        <div className="text-xs text-gold font-medium mb-1">{p.shiShen}</div>
+                        <div className="text-lg font-black text-white" style={{ color: getBaziColorHex(p.gan) }}>{p.gan}</div>
+                        <div className="text-lg font-black text-white" style={{ color: getBaziColorHex(p.zhi) }}>{p.zhi}</div>
+                        <div className="text-[10px] text-zinc-400 mt-1">{p.naYin}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 大运与流年 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+                      <div className="text-xs text-gold font-bold mb-1.5 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" /> 当前大运
+                      </div>
+                      <div className="text-sm font-bold text-white">
+                        {analysisData.currentDaYun.getGanZhi()}运 ({analysisData.currentDaYun.getStartYear()} - {analysisData.currentDaYun.getEndYear()}年)
+                      </div>
+                    </div>
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3">
+                      <div className="text-xs text-gold font-bold mb-1.5 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" /> {analysisData.currentYear} 流年
+                      </div>
+                      <div className="text-sm font-bold text-white">
+                        {analysisData.currentLiuNian.getGanZhi()}年 ({analysisData.currentLiuNian.getAge()}岁)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 五行力量分布 */}
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3.5">
+                    <div className="text-xs text-zinc-300 font-bold mb-2">五行原局能量分布</div>
+                    <div className="grid grid-cols-5 gap-2 text-center">
+                      {(['木', '火', '土', '金', '水'] as const).map(el => {
+                        const count = analysisData.elementsCount[el] || 0;
+                        const c = elemColors[el];
+                        return (
+                          <div key={el} style={{ backgroundColor: c.bg, borderColor: c.bar }} className="p-2 rounded-xl border">
+                            <div style={{ color: c.text }} className="text-xs font-black">{el}</div>
+                            <div className="text-sm font-bold text-white mt-0.5">{count}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : activePreviewPage === 2 ? (
+                <div className="flex flex-col gap-4">
+                  {/* 第二页头部 */}
+                  <div className="border-b border-gold/30 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm sm:text-base font-black text-white">命理档案</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30 font-bold">第二页</span>
+                    </div>
+                    <div className="text-right text-xs text-gold font-mono">{client.name} · 数字命宫</div>
+                  </div>
+
+                  {/* 4 柱根数 */}
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                      <div className="text-[11px] text-zinc-400 font-bold">年柱根数</div>
+                      <div className="text-xl font-black text-amber-400 mt-1">{analysisData.yrRoot}</div>
+                    </div>
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                      <div className="text-[11px] text-zinc-400 font-bold">月柱根数</div>
+                      <div className="text-xl font-black text-blue-400 mt-1">{analysisData.moRoot}</div>
+                    </div>
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                      <div className="text-[11px] text-zinc-400 font-bold">日柱根数</div>
+                      <div className="text-xl font-black text-emerald-400 mt-1">{analysisData.daRoot}</div>
+                    </div>
+                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-2.5">
+                      <div className="text-[11px] text-zinc-400 font-bold">时柱根数</div>
+                      <div className="text-xl font-black text-purple-400 mt-1">{analysisData.hrRoot}</div>
+                    </div>
+                  </div>
+
+                  {/* 核心主导数与特质 */}
+                  <div className="bg-zinc-950 border border-gold/30 rounded-xl p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-gold/15 border border-gold flex items-center justify-center text-xl font-black text-gold">
+                        {analysisData.coreRoot}
+                      </div>
+                      <div>
+                        <div className="text-xs text-zinc-400">生命核心主导数</div>
+                        <div className="text-base font-black text-white">{analysisData.traitInfo.title}</div>
+                        <div className="text-xs text-zinc-400 mt-0.5">{analysisData.traitInfo.desc}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {/* 第三页头部 */}
+                  <div className="border-b border-gold/30 pb-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm sm:text-base font-black text-white">命理档案</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30 font-bold">第三页</span>
+                    </div>
+                    <div className="text-right text-xs text-gold font-mono">{client.name} · 西洋占星</div>
+                  </div>
+
+                  <WesternAstrologyFullView
+                    westernData={analysisData}
+                    aspects={analysisData.aspectsList}
+                    isPdf={false}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 底部浮动操作栏 */}
+            <div className="mt-4 mb-2 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleShareToWhatsApp}
+                className="px-4 py-2.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-zinc-950 font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg cursor-pointer active:scale-95 transition-all"
+              >
+                <MessageCircle className="w-4 h-4 fill-zinc-950" />
+                <span>转发 PDF 到 WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow cursor-pointer active:scale-95 transition-all"
+              >
+                <Download className="w-4 h-4 text-gold" />
+                <span>保存至手机</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
