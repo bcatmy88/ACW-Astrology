@@ -1027,6 +1027,42 @@ export default function App() {
 
   const currentLiuRi = liuRiList[selectedRiIndex] || liuRiList[0];
 
+  const { elementsCount, taiYuan, mingGong, shenGong } = useMemo(() => {
+    if (!eightChar) {
+      return {
+        elementsCount: { '木': 0, '火': 0, '土': 0, '金': 0, '水': 0 } as Record<string, number>,
+        taiYuan: '',
+        mingGong: '',
+        shenGong: ''
+      };
+    }
+    const counts: Record<string, number> = { '木': 0, '火': 0, '土': 0, '金': 0, '水': 0 };
+    const allChars = [
+      eightChar.getYearGan(), eightChar.getYearZhi(),
+      eightChar.getMonthGan(), eightChar.getMonthZhi(),
+      eightChar.getDayGan(), eightChar.getDayZhi(),
+      eightChar.getTimeGan(), eightChar.getTimeZhi()
+    ];
+    const charToElem: Record<string, string> = {
+      '甲': '木', '乙': '木', '寅': '木', '卯': '木',
+      '丙': '火', '丁': '火', '巳': '火', '午': '火',
+      '戊': '土', '己': '土', '辰': '土', '戌': '土', '丑': '土', '未': '土',
+      '庚': '金', '辛': '金', '申': '金', '酉': '金',
+      '壬': '水', '癸': '水', '亥': '水', '子': '水'
+    };
+    allChars.forEach(c => {
+      const el = charToElem[c];
+      if (el && counts[el] !== undefined) counts[el]++;
+    });
+
+    return {
+      elementsCount: counts,
+      taiYuan: eightChar.getTaiYuan(),
+      mingGong: eightChar.getMingGong(),
+      shenGong: eightChar.getShenGong()
+    };
+  }, [eightChar]);
+
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-gold/30 px-4 sm:px-8 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))]">
@@ -1810,6 +1846,57 @@ export default function App() {
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">生日日期 (农历 Lunar)</span>
                 <span className="text-xs sm:text-sm font-semibold text-zinc-200 leading-snug break-words">{lunar.toString()} ({lunar.getYearInGanZhi()}年)</span>
+              </div>
+            </div>
+
+            {/* 五行能量与胎元命宫身宫 */}
+            <div className="bg-zinc-900/60 border border-zinc-800 p-3.5 sm:p-4 rounded-2xl shadow-lg flex flex-col gap-3">
+              <span className="text-xs sm:text-sm font-black text-gold">五行能量</span>
+              <div className="grid grid-cols-5 gap-2 sm:gap-2.5">
+                {(['木', '火', '土', '金', '水'] as const).map((el) => {
+                  const count = elementsCount[el] || 0;
+                  const config = {
+                    '木': { text: '#34d399', bar: '#10b981' },
+                    '火': { text: '#f87171', bar: '#ef4444' },
+                    '土': { text: '#fbbf24', bar: '#f59e0b' },
+                    '金': { text: '#fde047', bar: '#d4af37' },
+                    '水': { text: '#38bdf8', bar: '#0ea5e9' },
+                  }[el];
+                  const percent = Math.min(100, Math.round((count / 8) * 100));
+                  return (
+                    <div 
+                      key={el} 
+                      className="p-2 sm:p-2.5 rounded-xl bg-zinc-900/90 border border-zinc-800/80 flex flex-col items-center justify-between gap-2 shadow-sm"
+                    >
+                      <div className="flex items-center justify-center gap-1.5 font-bold">
+                        <span className="text-xs sm:text-sm font-bold" style={{ color: config.text }}>{el}</span>
+                        <span className="text-white font-mono text-xs sm:text-sm font-bold">{count}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-300" 
+                          style={{ width: `${percent}%`, backgroundColor: config.bar }} 
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 胎元 命宫 身宫 */}
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 shadow-sm">
+                  <span className="text-zinc-400">胎元:</span>
+                  <span className="text-gold font-bold">{taiYuan}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 shadow-sm">
+                  <span className="text-zinc-400">命宫:</span>
+                  <span className="text-gold font-bold">{mingGong}</span>
+                </div>
+                <div className="p-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-zinc-400 flex items-center justify-center gap-1.5 shadow-sm">
+                  <span className="text-zinc-400">身宫:</span>
+                  <span className="text-gold font-bold">{shenGong}</span>
+                </div>
               </div>
             </div>
 
