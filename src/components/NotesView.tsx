@@ -15,7 +15,9 @@ import {
   Globe,
   Check,
   Edit3,
-  Sparkles
+  Sparkles,
+  Tag,
+  Hash
 } from 'lucide-react';
 import type { NoteItem, AppLanguage } from '../types';
 import LanguageToggle from './LanguageToggle';
@@ -30,6 +32,12 @@ interface NotesViewProps {
   profileAvatar?: string;
   profileName?: string;
 }
+
+const PRESET_KEYWORDS = [
+  '八字命理', '数字学', '占星相位', '十二命宫', 
+  '风水堪舆', '佛牌法事', '催财起运', '化解小人', 
+  '姻缘合婚', '客户问事', '修心随笔'
+];
 
 // Image compression helper
 async function compressImage(file: File): Promise<string> {
@@ -79,6 +87,7 @@ export default function NotesView({
   profileName
 }: NotesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   
   // Editor modal state
   const [isEditing, setIsEditing] = useState(false);
@@ -89,6 +98,8 @@ export default function NotesView({
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formContent, setFormContent] = useState('');
   const [formImages, setFormImages] = useState<string[]>([]);
+  const [formKeywords, setFormKeywords] = useState<string[]>([]);
+  const [customKeywordInput, setCustomKeywordInput] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
   // Feed interactive states
@@ -110,14 +121,36 @@ export default function NotesView({
     setLightboxData({ images, index });
   };
 
-  // Filtered notes
+  // Collect all unique categories from notes and presets
+  const allCategories = useMemo(() => {
+    const catSet = new Set<string>();
+    notes.forEach(n => {
+      (n.keywords || []).forEach(k => {
+        if (k.trim()) catSet.add(k.trim());
+      });
+    });
+    PRESET_KEYWORDS.forEach(k => catSet.add(k));
+    return Array.from(catSet);
+  }, [notes]);
+
+  // Filtered notes by search query and category
   const filteredNotes = useMemo(() => {
     return notes.filter(n => {
+      // Category filter
+      if (selectedCategory) {
+        if (!(n.keywords || []).includes(selectedCategory)) {
+          return false;
+        }
+      }
+      // Search query
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
-      return n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q);
+      const matchTitle = n.title.toLowerCase().includes(q);
+      const matchContent = n.content.toLowerCase().includes(q);
+      const matchKeywords = (n.keywords || []).some(k => k.toLowerCase().includes(q));
+      return matchTitle || matchContent || matchKeywords;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || b.updatedAt - a.updatedAt);
-  }, [notes, searchQuery]);
+  }, [notes, searchQuery, selectedCategory]);
 
   const handleOpenNewNote = () => {
     setSelectedNote(null);
@@ -125,6 +158,8 @@ export default function NotesView({
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormContent('');
     setFormImages([]);
+    setFormKeywords(selectedCategory ? [selectedCategory] : ['八字命理']);
+    setCustomKeywordInput('');
     setIsEditing(true);
   };
 
@@ -134,7 +169,30 @@ export default function NotesView({
     setFormDate(note.date);
     setFormContent(note.content);
     setFormImages(note.images || []);
+    setFormKeywords(note.keywords || []);
+    setCustomKeywordInput('');
     setIsEditing(true);
+  };
+
+  const handleAddCustomKeyword = () => {
+    const trimmed = customKeywordInput.trim().replace(/^#+/, '');
+    if (!trimmed) return;
+    if (!formKeywords.includes(trimmed)) {
+      setFormKeywords(prev => [...prev, trimmed]);
+    }
+    setCustomKeywordInput('');
+  };
+
+  const handleToggleFormKeyword = (kw: string) => {
+    if (formKeywords.includes(kw)) {
+      setFormKeywords(prev => prev.filter(k => k !== kw));
+    } else {
+      setFormKeywords(prev => [...prev, kw]);
+    }
+  };
+
+  const handleRemoveFormKeyword = (kw: string) => {
+    setFormKeywords(prev => prev.filter(k => k !== kw));
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,6 +234,7 @@ export default function NotesView({
       date: formDate || new Date().toISOString().split('T')[0],
       content: formContent,
       images: formImages,
+      keywords: formKeywords,
       createdAt: selectedNote ? selectedNote.createdAt : now,
       updatedAt: now
     };
@@ -229,17 +288,14 @@ export default function NotesView({
                 e.stopPropagation();
                 openLightbox(images, idx);
               }}
-              className="relative h-full bg-zinc-950 cursor-pointer overflow-hidden group/img"
+              className="relative h-full bg-zinc-950 cursor-pointer group/img overflow-hidden"
             >
               <img 
                 src={img} 
                 alt={`Media ${idx + 1}`} 
-                className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105" 
+                className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-[1.02]" 
                 loading="lazy" 
               />
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                <Maximize2 className="w-4 h-4 text-white drop-shadow-md" />
-              </div>
             </div>
           ))}
         </div>
@@ -254,37 +310,31 @@ export default function NotesView({
               e.stopPropagation();
               openLightbox(images, 0);
             }}
-            className="relative h-full bg-zinc-950 cursor-pointer overflow-hidden group/img"
+            className="relative h-full bg-zinc-950 cursor-pointer group/img overflow-hidden"
           >
             <img 
               src={images[0]} 
               alt="Media 1" 
-              className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105" 
+              className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-[1.02]" 
               loading="lazy" 
             />
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-              <Maximize2 className="w-4 h-4 text-white drop-shadow-md" />
-            </div>
           </div>
           <div className="grid grid-rows-2 gap-1.5 h-full">
-            {[images[1], images[2]].map((img, subIdx) => (
+            {images.slice(1, 3).map((img, idx) => (
               <div 
-                key={subIdx}
+                key={idx + 1}
                 onClick={(e) => {
                   e.stopPropagation();
-                  openLightbox(images, subIdx + 1);
+                  openLightbox(images, idx + 1);
                 }}
-                className="relative h-full bg-zinc-950 cursor-pointer overflow-hidden group/img"
+                className="relative h-full bg-zinc-950 cursor-pointer group/img overflow-hidden"
               >
                 <img 
                   src={img} 
-                  alt={`Media ${subIdx + 2}`} 
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105" 
+                  alt={`Media ${idx + 2}`} 
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-[1.02]" 
                   loading="lazy" 
                 />
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                  <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow-md" />
-                </div>
               </div>
             ))}
           </div>
@@ -292,34 +342,7 @@ export default function NotesView({
       );
     }
 
-    if (images.length === 4) {
-      return (
-        <div className="grid grid-cols-2 gap-1.5 h-64 sm:h-80 rounded-xl overflow-hidden border border-zinc-800/80">
-          {images.slice(0, 4).map((img, idx) => (
-            <div 
-              key={idx}
-              onClick={(e) => {
-                e.stopPropagation();
-                openLightbox(images, idx);
-              }}
-              className="relative h-full bg-zinc-950 cursor-pointer overflow-hidden group/img"
-            >
-              <img 
-                src={img} 
-                alt={`Media ${idx + 1}`} 
-                className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105" 
-                loading="lazy" 
-              />
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow-md" />
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    // 5 or more photos (Facebook 2x2 with +N overlay)
+    // 4 or more images
     return (
       <div className="grid grid-cols-2 gap-1.5 h-64 sm:h-80 rounded-xl overflow-hidden border border-zinc-800/80">
         {images.slice(0, 3).map((img, idx) => (
@@ -329,19 +352,18 @@ export default function NotesView({
               e.stopPropagation();
               openLightbox(images, idx);
             }}
-            className="relative h-full bg-zinc-950 cursor-pointer overflow-hidden group/img"
+            className="relative h-full bg-zinc-950 cursor-pointer group/img overflow-hidden"
           >
             <img 
               src={img} 
               alt={`Media ${idx + 1}`} 
-              className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105" 
+              className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-[1.02]" 
               loading="lazy" 
             />
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-              <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow-md" />
-            </div>
           </div>
         ))}
+
+        {/* 4th box with overlay count */}
         <div 
           onClick={(e) => {
             e.stopPropagation();
@@ -393,7 +415,7 @@ export default function NotesView({
           {onToggleLang && <LanguageToggle lang={lang} onToggle={onToggleLang} />}
           <button 
             onClick={handleOpenNewNote}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-gold hover:bg-yellow-400 text-zinc-950 font-bold rounded-lg text-xs transition-all active:scale-95 shadow-sm"
+            className="flex items-center gap-1 px-3 py-1.5 bg-gold hover:bg-yellow-400 text-zinc-950 font-bold rounded-lg text-xs transition-all active:scale-95 shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{lang === 'zh' ? '写心得' : 'Post'}</span>
@@ -401,7 +423,7 @@ export default function NotesView({
         </div>
       </header>
 
-      {/* FACEBOOK STYLE: "WHAT'S ON YOUR MIND?" COMPOSER TRIGGER */}
+      {/* COMPOSER TRIGGER */}
       <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-700 via-gold to-yellow-300 p-0.5 shadow-sm shrink-0 overflow-hidden">
@@ -456,19 +478,88 @@ export default function NotesView({
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={lang === 'zh' ? '搜索动态笔记或关键字...' : 'Search wall posts and notes...'}
+          placeholder={lang === 'zh' ? '搜索动态笔记、关键词分类、心得内容...' : 'Search posts, keywords and content...'}
           className="w-full pl-8 pr-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-gold/50 transition-colors"
         />
       </div>
 
-      {/* FACEBOOK WALL FEED (NOTES LIST) */}
+      {/* KEYWORD CATEGORIES FILTER BAR */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar pt-0.5">
+        <button
+          type="button"
+          onClick={() => setSelectedCategory(null)}
+          className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 transition-all flex items-center gap-1 cursor-pointer ${
+            selectedCategory === null
+              ? 'bg-gold text-zinc-950 shadow-sm'
+              : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+          }`}
+        >
+          <span>{lang === 'zh' ? '全部' : 'All'}</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${selectedCategory === null ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+            {notes.length}
+          </span>
+        </button>
+
+        {allCategories.map(cat => {
+          const count = notes.filter(n => (n.keywords || []).includes(cat)).length;
+          const isSelected = selectedCategory === cat;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setSelectedCategory(isSelected ? null : cat)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                isSelected
+                  ? 'bg-gold text-zinc-950 font-bold shadow-sm'
+                  : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+              }`}
+            >
+              <span>#{cat}</span>
+              {count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-zinc-950/20 text-zinc-950 font-bold' : 'bg-zinc-800 text-zinc-400'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* FILTER STATUS NOTIFICATION */}
+      {selectedCategory && (
+        <div className="flex items-center justify-between bg-gold/10 border border-gold/30 px-3 py-1.5 rounded-xl text-xs text-gold">
+          <div className="flex items-center gap-1.5 font-bold">
+            <Tag className="w-3.5 h-3.5" />
+            <span>{lang === 'zh' ? `当前关键词分类：#${selectedCategory}` : `Filtered by: #${selectedCategory}`}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedCategory(null)}
+            className="text-[11px] underline hover:text-white cursor-pointer"
+          >
+            {lang === 'zh' ? '清除分类' : 'Clear filter'}
+          </button>
+        </div>
+      )}
+
+      {/* NOTES LIST */}
       <div className="flex flex-col gap-4 min-h-[300px]">
         {filteredNotes.length === 0 ? (
           <div className="bg-zinc-900/30 border border-zinc-800/60 rounded-2xl p-10 text-center flex flex-col items-center justify-center gap-2.5">
             <BookOpen className="w-8 h-8 text-zinc-600" />
             <p className="text-xs text-zinc-400 font-medium">
-              {lang === 'zh' ? '暂无笔记动态' : 'No posts yet'}
+              {selectedCategory 
+                ? (lang === 'zh' ? `暂无分类为“#${selectedCategory}”的笔记` : `No notes under #${selectedCategory}`)
+                : (lang === 'zh' ? '暂无笔记动态' : 'No posts yet')}
             </p>
+            {selectedCategory && (
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="text-xs text-gold underline hover:text-white mt-1 cursor-pointer"
+              >
+                {lang === 'zh' ? '查看全部笔记' : 'View all notes'}
+              </button>
+            )}
             {notes.length === 0 && (
               <button
                 onClick={handleOpenNewNote}
@@ -488,7 +579,7 @@ export default function NotesView({
                 key={item.id}
                 className="bg-zinc-900/85 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700/80 rounded-2xl p-3.5 sm:p-4 flex flex-col gap-2.5 transition-all duration-150 shadow-sm overflow-hidden w-full max-w-full min-w-0"
               >
-                {/* 1. POST HEADER (User Avatar & Author Info) */}
+                {/* 1. POST HEADER */}
                 <div className="flex items-start justify-between gap-2 min-w-0">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-700 via-gold to-yellow-300 p-0.5 shadow-sm shrink-0 overflow-hidden">
@@ -560,7 +651,32 @@ export default function NotesView({
                   </h2>
                 )}
 
-                {/* 3. POST BODY (Wrapped & clean, with inline "See more") */}
+                {/* 3. KEYWORDS CATEGORY BADGES */}
+                {item.keywords && item.keywords.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {item.keywords.map(kw => (
+                      <button
+                        key={kw}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCategory(kw);
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer ${
+                          selectedCategory === kw
+                            ? 'bg-gold text-zinc-950 font-bold shadow-sm'
+                            : 'bg-gold/10 hover:bg-gold/20 text-gold border border-gold/30'
+                        }`}
+                        title={lang === 'zh' ? `点击筛选：#${kw}` : `Filter by: #${kw}`}
+                      >
+                        <span className="opacity-70 font-mono">#</span>
+                        <span>{kw}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 4. POST BODY */}
                 {item.content && (
                   <div className="text-xs sm:text-[13px] text-zinc-200 leading-relaxed whitespace-pre-line font-normal break-all break-words [overflow-wrap:anywhere] min-w-0 max-w-full overflow-hidden">
                     {isLong && !isExpanded ? (
@@ -601,9 +717,9 @@ export default function NotesView({
                   </div>
                 )}
 
-                {/* 4. PHOTO GRID */}
+                {/* 5. ATTACHED IMAGES */}
                 {item.images && item.images.length > 0 && (
-                  <div className="pt-0.5">
+                  <div className="pt-1">
                     {renderFacebookImages(item.images)}
                   </div>
                 )}
@@ -613,31 +729,37 @@ export default function NotesView({
         )}
       </div>
 
-      {/* NOTE EDIT MODAL (POPUP) */}
+      {/* NOTE COMPOSER / EDITOR MODAL */}
       {isEditing && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[100] flex items-center justify-center p-3 overflow-y-auto">
-          <div className="bg-zinc-950 border border-zinc-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col my-auto max-h-[88vh]">
-            {/* Header */}
-            <div className="p-3.5 border-b border-zinc-800 bg-zinc-900/60 flex items-center justify-between">
-              <h2 className="text-xs sm:text-sm font-bold text-white">
-                {selectedNote ? (lang === 'zh' ? '改笔记' : 'Edit Note') : (lang === 'zh' ? '写笔记' : 'New Note')}
-              </h2>
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3 backdrop-blur-sm">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="p-3.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/60">
+              <span className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <Edit3 className="w-4 h-4 text-gold" />
+                {selectedNote 
+                  ? (lang === 'zh' ? '编辑笔记' : 'Edit Note') 
+                  : (lang === 'zh' ? '发表心得笔记' : 'Create Note')}
+              </span>
               <button
+                type="button"
                 onClick={() => {
                   setIsEditing(false);
                   setSelectedNote(null);
                 }}
-                className="w-6 h-6 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white text-xs transition-colors"
+                className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Form Body */}
-            <div className="p-3.5 overflow-y-auto flex flex-col gap-3">
+            {/* Modal Form Scrollable Area */}
+            <div className="p-4 overflow-y-auto flex flex-col gap-3.5">
+              
               {/* Title & Date */}
-              <div className="grid grid-cols-[1fr_120px] gap-2">
-                <div className="flex flex-col gap-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2 flex flex-col gap-1">
                   <label className="text-[11px] font-bold text-zinc-300">
                     {lang === 'zh' ? '标题' : 'Title'}
                   </label>
@@ -645,8 +767,8 @@ export default function NotesView({
                     type="text"
                     value={formTitle}
                     onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder={lang === 'zh' ? '例如：今日补财库法事心得' : 'Title...'}
-                    className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-gold/50"
+                    placeholder={lang === 'zh' ? '例如: 补财库心得、今日问事' : 'Note Title'}
+                    className="w-full px-2.5 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-gold/50 font-medium"
                   />
                 </div>
 
@@ -664,28 +786,91 @@ export default function NotesView({
                 </div>
               </div>
 
-              {/* Quick Topics */}
-              <div className="flex items-center gap-1 flex-wrap">
-                {(lang === 'zh'
-                  ? ['补财库心得', '祈福法事', '八字运程感悟', '佛牌圣物加持', '化太岁记录', '修心随笔']
-                  : ['Ritual Note', 'Fortune Insight', 'Astrology Wisdom', 'Protection', 'Blessing']
-                ).map((topic) => (
+              {/* KEYWORD CATEGORIES SECTION (关键词分类) */}
+              <div className="flex flex-col gap-2 p-3 bg-zinc-900/60 border border-zinc-800/80 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-zinc-300 flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5 text-gold" />
+                    <span>{lang === 'zh' ? '关键词分类 (多选)' : 'Keyword Categories'}</span>
+                  </label>
+                  <span className="text-[10px] text-zinc-400">
+                    {formKeywords.length} {lang === 'zh' ? '个标签' : 'tags'}
+                  </span>
+                </div>
+
+                {/* Selected Keywords Tags */}
+                {formKeywords.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {formKeywords.map(kw => (
+                      <span 
+                        key={kw}
+                        className="px-2 py-0.5 rounded-md bg-gold/15 text-gold border border-gold/40 text-xs font-semibold flex items-center gap-1 shadow-sm"
+                      >
+                        <span>#{kw}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFormKeyword(kw)}
+                          className="hover:text-rose-400 ml-0.5 p-0.5 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add Custom Keyword */}
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={customKeywordInput}
+                    onChange={(e) => setCustomKeywordInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomKeyword();
+                      }
+                    }}
+                    placeholder={lang === 'zh' ? '输入自定义关键词 (如: 化煞、招财)...' : 'Add custom keyword...'}
+                    className="flex-1 px-2.5 py-1.5 bg-zinc-950 border border-zinc-700 rounded-lg text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-gold"
+                  />
                   <button
-                    key={topic}
                     type="button"
-                    onClick={() => setFormTitle(topic)}
-                    className={`text-[10px] px-2 py-0.5 rounded-md border transition-all ${
-                      formTitle === topic
-                        ? 'bg-gold/20 text-gold border-gold/50 font-bold'
-                        : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700'
-                    }`}
+                    onClick={handleAddCustomKeyword}
+                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 border border-zinc-700"
                   >
-                    {topic}
+                    {lang === 'zh' ? '+ 添加' : '+ Add'}
                   </button>
-                ))}
+                </div>
+
+                {/* Quick Preset Keyword Chips */}
+                <div className="flex flex-col gap-1 pt-1">
+                  <span className="text-[10px] text-zinc-400">
+                    {lang === 'zh' ? '快捷关键词推荐：' : 'Preset recommendations:'}
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {PRESET_KEYWORDS.map(preset => {
+                      const isChecked = formKeywords.includes(preset);
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => handleToggleFormKeyword(preset)}
+                          className={`text-[10px] px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                            isChecked
+                              ? 'bg-gold text-zinc-950 border-gold font-bold shadow-sm'
+                              : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700 hover:text-zinc-200'
+                          }`}
+                        >
+                          #{preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
-              {/* Notes Paragraph */}
+              {/* Notes Content */}
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-bold text-zinc-300">
                   {lang === 'zh' ? '内容' : 'Content'}
@@ -760,7 +945,7 @@ export default function NotesView({
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Modal Footer */}
             <div className="p-3 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between gap-2">
               {selectedNote ? (
                 <button
@@ -798,7 +983,7 @@ export default function NotesView({
         </div>
       )}
 
-      {/* FULL-SCREEN FACEBOOK GALLERY LIGHTBOX */}
+      {/* FULL-SCREEN GALLERY LIGHTBOX */}
       {lightboxData && (
         <div 
           onClick={() => setLightboxData(null)}
@@ -865,4 +1050,3 @@ export default function NotesView({
     </div>
   );
 }
-

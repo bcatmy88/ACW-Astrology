@@ -48,6 +48,7 @@ export interface NoteItem {
   createdAt: number;
   updatedAt: number;
   clientId?: string;
+  keywords?: string[]; // Multiple keyword category tags (e.g. ["八字命理", "风水", "客户问事"])
 }
 
 export interface BackupData {

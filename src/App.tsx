@@ -51,7 +51,7 @@ import AppointmentsView from './components/AppointmentsView';
 import SettingsView from './components/SettingsView';
 import LanguageToggle from './components/LanguageToggle';
 import NotificationModal from './components/NotificationModal';
-import { syncAppointmentsToNative, checkNotificationLaunch, scheduleAppointmentExactReminder, cancelAppointmentExactReminder } from './services/nativeReminder';
+import PdfShareModal from './components/PdfShareModal';
 
 // --- Types ---
 interface BaziData {
@@ -375,6 +375,28 @@ export default function App() {
     localStorage.setItem('archan_wang_profile_name', name);
   };
 
+  // Custom Logo for Destiny PDF Reports and Sharing
+  const [reportLogo, setReportLogo] = useState<string>(() => {
+    try {
+      return localStorage.getItem('destiny_report_logo') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const handleSaveReportLogo = (logo: string) => {
+    setReportLogo(logo);
+    try {
+      if (logo) {
+        localStorage.setItem('destiny_report_logo', logo);
+      } else {
+        localStorage.removeItem('destiny_report_logo');
+      }
+    } catch (e) {
+      console.error('Failed to persist report logo', e);
+    }
+  };
+
   const [birthDate, setBirthDate] = useState('1990-05-20');
   const [birthTime, setBirthTime] = useState('10:30');
   const [timezone, setTimezone] = useState(8);
@@ -419,6 +441,8 @@ export default function App() {
     return (savedLang === 'en' || savedLang === 'zh') ? savedLang : 'zh';
   });
 
+  const [sharingClient, setSharingClient] = useState<SavedClient | null>(null);
+
   const handleSetLang = (newLang: AppLanguage) => {
     setLangState(newLang);
     localStorage.setItem('archan_wang_lang', newLang);
@@ -461,33 +485,11 @@ export default function App() {
       try {
         const parsedApts = JSON.parse(savedAppointments);
         setAppointments(parsedApts);
-        syncAppointmentsToNative(parsedApts);
       } catch (e) {
         console.error("Error parsing appointments", e);
       }
     }
-
-    // Check if launched from notification tap
-    const handleNotificationOpen = () => {
-      setView('appointments');
-    };
-    window.addEventListener('open_appointments_view', handleNotificationOpen);
-
-    checkNotificationLaunch().then(opened => {
-      if (opened) {
-        setView('appointments');
-      }
-    });
-
-    return () => {
-      window.removeEventListener('open_appointments_view', handleNotificationOpen);
-    };
   }, []);
-
-  // Synchronize appointments with native Android whenever state changes
-  useEffect(() => {
-    syncAppointmentsToNative(appointments);
-  }, [appointments]);
 
   const saveToLocalStorage = (updatedClients: SavedClient[]) => {
     localStorage.setItem('archan_wang_clients', JSON.stringify(updatedClients));
@@ -541,7 +543,6 @@ export default function App() {
       localStorage.setItem('archan_wang_appointments', JSON.stringify(updated));
       return updated;
     });
-    scheduleAppointmentExactReminder(aptItem);
   };
 
   const handleDeleteAppointment = (aptId: string) => {
@@ -550,7 +551,6 @@ export default function App() {
       localStorage.setItem('archan_wang_appointments', JSON.stringify(updated));
       return updated;
     });
-    cancelAppointmentExactReminder(aptId);
   };
 
   const handleRestoreData = (backup: BackupData, mode: 'overwrite' | 'merge') => {
@@ -1448,15 +1448,27 @@ export default function App() {
                     </button>
                     <div className="flex items-center gap-1 shrink-0">
                       <button 
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSharingClient(client);
+                        }}
+                        className="h-9 px-2.5 flex items-center gap-1.5 text-xs font-bold text-gold hover:text-zinc-950 bg-gold/10 hover:bg-gold border border-gold/30 rounded-xl transition-all active:scale-95 cursor-pointer shadow-sm"
+                        title={lang === 'zh' ? '分享 PDF 档案' : 'Share PDF Report'}
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">{lang === 'zh' ? '分享 PDF' : 'Share PDF'}</span>
+                      </button>
+                      <button 
                         onClick={(e) => editClient(client, e)}
-                        className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-gold hover:bg-zinc-800/80 rounded-xl transition-all active:scale-95 cursor-pointer"
+                        className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-gold hover:bg-zinc-800/80 rounded-xl transition-all active:scale-95 cursor-pointer"
                         title="编辑 (Edit)"
                       >
                         <Settings className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={(e) => deleteClient(client.id, e)}
-                        className="w-10 h-10 flex items-center justify-center text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all active:scale-95 cursor-pointer"
+                        className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all active:scale-95 cursor-pointer"
                         title="删除 (Delete)"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1636,11 +1648,25 @@ export default function App() {
                 <span className="whitespace-nowrap">{lang === 'zh' ? '返回' : 'Back'}</span>
                 <span className="hidden sm:inline whitespace-nowrap">{lang === 'zh' ? '列表' : ''}</span>
               </button>
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0">
-                <div className="flex items-center gap-1 sm:gap-1.5 bg-zinc-900 border border-zinc-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl h-9 sm:h-10 shrink min-w-0 max-w-[120px] sm:max-w-[220px]">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink min-w-0 flex-nowrap">
+                <div className="flex items-center gap-1 sm:gap-1.5 bg-zinc-900 border border-zinc-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl h-9 sm:h-10 shrink min-w-0 max-w-[140px] min-[380px]:max-w-[180px] sm:max-w-[280px] md:max-w-[360px] flex-nowrap overflow-hidden">
                   <User className="w-3.5 h-3.5 text-gold shrink-0" />
-                  <span className="text-xs sm:text-sm font-bold text-white truncate whitespace-nowrap">{clientName}</span>
-                  <span className="text-[11px] sm:text-xs text-zinc-400 font-medium shrink-0 whitespace-nowrap">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
+                  <span 
+                    className="font-bold text-white truncate whitespace-nowrap"
+                    style={{
+                      fontSize: clientName.length > 18 
+                        ? 'clamp(9.5px, 2.2vw, 10.5px)' 
+                        : clientName.length > 12 
+                        ? 'clamp(10.5px, 2.4vw, 11.5px)' 
+                        : clientName.length > 7 
+                        ? 'clamp(11.5px, 2.6vw, 12.5px)' 
+                        : 'clamp(12px, 2.8vw, 14px)'
+                    }}
+                    title={clientName}
+                  >
+                    {clientName}
+                  </span>
+                  <span className="text-[10px] sm:text-xs text-zinc-400 font-medium shrink-0 whitespace-nowrap">({gender === 1 ? (lang === 'zh' ? '男' : 'M') : (lang === 'zh' ? '女' : 'F')})</span>
                   {currentAnalysisClientId && (
                     <button 
                       onClick={() => setAsMainUser(currentAnalysisClientId)}
@@ -1655,6 +1681,26 @@ export default function App() {
                   )}
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetClient = savedClients.find(c => c.id === currentAnalysisClientId) || {
+                      id: currentAnalysisClientId || 'temp',
+                      name: clientName,
+                      phone: clientPhone || '',
+                      birthDate,
+                      birthTime,
+                      gender: gender === 1 ? 'male' : 'female',
+                      createdAt: Date.now()
+                    };
+                    setSharingClient(targetClient);
+                  }}
+                  className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r from-amber-500 to-gold hover:from-amber-400 hover:to-yellow-400 text-zinc-950 rounded-xl flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
+                  title={lang === 'zh' ? '分享 PDF 档案' : 'Share PDF Report'}
+                >
+                  <Share2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                </button>
+
                 <LanguageToggle lang={lang} onToggle={handleSetLang} />
               </div>
             </header>
@@ -1663,7 +1709,19 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2 sm:gap-3 bg-zinc-900/60 border border-zinc-800 p-3.5 sm:p-5 rounded-2xl shadow-lg">
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">姓名 (Name)</span>
-                <span className="text-sm sm:text-base font-bold text-white truncate">{clientName}</span>
+                <span 
+                  className="font-bold text-white truncate whitespace-nowrap"
+                  style={{
+                    fontSize: clientName.length > 16 
+                      ? '12px' 
+                      : clientName.length > 10 
+                      ? '13px' 
+                      : '15px'
+                  }}
+                  title={clientName}
+                >
+                  {clientName}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5 min-w-0">
                 <span className="text-[10px] sm:text-xs text-zinc-400 font-medium tracking-normal uppercase truncate">岁数 (Age)</span>
@@ -2534,7 +2592,7 @@ export default function App() {
                             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">相位分析 (Aspects)</span>
                             <span className="text-[9px] font-bold text-zinc-500">共 {aspects.length} 个主要相位</span>
                          </div>
-                         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto custom-scrollbar">
+                         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto custom-scrollbar">
                             {aspects.map((asp, idx) => (
                                <div key={idx} className="bg-black/30 border border-zinc-800/50 p-2 rounded-lg flex flex-col gap-1">
                                   <div className="flex items-center justify-between">
@@ -2569,11 +2627,13 @@ export default function App() {
                           <tbody>
                              {westernData.planets.map((p, i) => (
                                 <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
-                                   <td className="p-2 flex items-center gap-2">
-                                      <span className="text-xl text-gold pb-1">{p.symbol}</span>
-                                      <div className="flex flex-col">
-                                         <span className="text-sm font-bold text-white">{p.name}</span>
-                                         {p.isRetrograde && <span className="text-[9px] text-rose-500 font-black uppercase">Retrograde 逆行</span>}
+                                   <td className="p-2 whitespace-nowrap">
+                                      <div className="flex items-center gap-2 flex-nowrap">
+                                         <span className="text-xl text-gold pb-1 shrink-0">{p.symbol}</span>
+                                         <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
+                                            <span className="text-sm font-bold text-white whitespace-nowrap">{p.name}</span>
+                                            {p.isRetrograde && <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800/80 font-black uppercase shrink-0 whitespace-nowrap leading-none">Retrograde 逆行</span>}
+                                         </div>
                                       </div>
                                    </td>
                                    <td className="p-2 text-xs font-medium text-zinc-300">
@@ -2841,6 +2901,8 @@ export default function App() {
           profileName={profileName}
           onSaveProfileName={handleSaveProfileName}
           onNavigateToNotes={() => setView('notes')}
+          reportLogo={reportLogo}
+          onSaveReportLogo={handleSaveReportLogo}
         />
       )}
 
@@ -2861,6 +2923,16 @@ export default function App() {
         onInspectClientBazi={(client) => loadClient(client)}
         lang={lang}
       />
+
+      {/* DESTINY PDF SHARING MODAL */}
+      {sharingClient && (
+        <PdfShareModal
+          client={sharingClient}
+          onClose={() => setSharingClient(null)}
+          lang={lang}
+          reportLogo={reportLogo}
+        />
+      )}
     </div>
   );
 }
