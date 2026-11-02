@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Solar, Lunar, EightChar, DaYun, LiuNian, LiuYue } from 'lunar-javascript';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -408,9 +408,49 @@ export default function App() {
   const [longitude, setLongitude] = useState(101.6869); // Default KL
   const [gender, setGender] = useState(1); // 1 for Male, 0 for Female
   const [selectedDaYunIndex, setSelectedDaYunIndex] = useState(1);
-  const [selectedNianYear, setSelectedNianYear] = useState(new Date().getFullYear());
-  const [selectedYueIndex, setSelectedYueIndex] = useState(new Date().getMonth());
-  const [selectedRiIndex, setSelectedRiIndex] = useState(new Date().getDate() - 1);
+  const [selectedNianYear, setSelectedNianYear] = useState(() => new Date().getFullYear());
+  const [numerologyYear, setNumerologyYear] = useState(() => new Date().getFullYear());
+  const [selectedYueIndex, setSelectedYueIndex] = useState(() => {
+    try {
+      const now = Solar.fromDate(new Date());
+      const prevJie = now.getLunar().getPrevJie().getName();
+      const names = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+      const idx = names.indexOf(prevJie);
+      return idx >= 0 ? idx : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [selectedRiIndex, setSelectedRiIndex] = useState(() => {
+    try {
+      const today = new Date();
+      const nowSolar = Solar.fromDate(today);
+      const prevJie = nowSolar.getLunar().getPrevJie().getName();
+      const names = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+      const yueIdx = names.indexOf(prevJie);
+      const safeYue = yueIdx >= 0 ? yueIdx : 0;
+      const monthMap: Record<string, number> = { '立春': 2, '惊蛰': 3, '清明': 4, '立夏': 5, '芒种': 6, '小暑': 7, '立秋': 8, '白露': 9, '寒露': 10, '立冬': 11, '大雪': 12, '小寒': 1 };
+      const m = monthMap[names[safeYue]];
+      const startYear = (safeYue === 11) ? nowSolar.getYear() + 1 : nowSolar.getYear();
+      let startSolar = null;
+      if (m) {
+        for (let d = 1; d <= 15; d++) {
+          const s = Solar.fromYmd(startYear, m, d);
+          if (s.getLunar().getJieQi() === names[safeYue]) {
+            startSolar = s;
+            break;
+          }
+        }
+      }
+      if (!startSolar) {
+        startSolar = Solar.fromYmd(startYear, (safeYue + 1) % 12 + 1, 4);
+      }
+      const todayOnly = Solar.fromYmd(nowSolar.getYear(), nowSolar.getMonth(), nowSolar.getDay());
+      return Math.max(0, Math.min(31, todayOnly.subtract(startSolar)));
+    } catch {
+      return 0;
+    }
+  });
 
   // Client info state
   const [clientName, setClientName] = useState('');
@@ -767,6 +807,7 @@ export default function App() {
     setGender(client.gender === 'male' ? 1 : 0);
     setEditingClientId(null);
     setCurrentAnalysisClientId(client.id);
+    setNumerologyYear(new Date().getFullYear());
 
     await new Promise(r => setTimeout(r, 280));
     setProfileProgress(100);
@@ -991,11 +1032,35 @@ export default function App() {
 
   const { solar, lunar, eightChar, yun } = data;
   const daYunList = yun.getDaYun();
-  const currentDaYun = daYunList[selectedDaYunIndex] || daYunList[1];
+  const currentDaYun = (daYunList[selectedDaYunIndex] !== undefined)
+    ? daYunList[selectedDaYunIndex]
+    : (daYunList[1] || daYunList[0]);
   const liuNianList = currentDaYun.getLiuNian();
   const currentLiuNian = liuNianList.find((ln: LiuNian) => ln.getYear() === selectedNianYear) || liuNianList[0];
   const liuYueList = currentLiuNian.getLiuYue();
   const currentLiuYue = liuYueList[selectedYueIndex] || liuYueList[0];
+
+  // XiaoYun for the currently selected year (in childhood or DaYun)
+  const currentXiaoYun = useMemo(() => {
+    if (!currentDaYun || !currentLiuNian) return null;
+    const xyList = currentDaYun.getXiaoYun ? currentDaYun.getXiaoYun() : [];
+    return xyList.find((xy: any) => xy.getYear() === currentLiuNian.getYear()) || xyList[0] || null;
+  }, [currentDaYun, currentLiuNian]);
+
+  // Effective GanZhi for DaYun / XiaoYun column
+  const effectiveDaYunGanZhi = useMemo(() => {
+    if (selectedDaYunIndex === 0 && currentXiaoYun) {
+      return currentXiaoYun.getGanZhi();
+    }
+    const gz = currentDaYun?.getGanZhi ? currentDaYun.getGanZhi() : '';
+    if (!gz && currentXiaoYun) {
+      return currentXiaoYun.getGanZhi();
+    }
+    return gz;
+  }, [selectedDaYunIndex, currentDaYun, currentXiaoYun]);
+
+  const daYunGan = effectiveDaYunGanZhi ? effectiveDaYunGanZhi.substring(0, 1) : '';
+  const daYunZhi = effectiveDaYunGanZhi ? effectiveDaYunGanZhi.substring(1, 2) : '';
   
   // Calculate LiuRi (Days) correctly using Bazi sectional month boundaries (solar terms)
   const liuRiList = useMemo(() => {
@@ -1007,7 +1072,6 @@ export default function App() {
         const monthMap: Record<string, number> = { '立春': 2, '惊蛰': 3, '清明': 4, '立夏': 5, '芒种': 6, '小暑': 7, '立秋': 8, '白露': 9, '寒露': 10, '立冬': 11, '大雪': 12, '小寒': 1 };
         const m = monthMap[name];
         if (!m) return null;
-        // Sectional terms usually fall between 4-8. Search a bit around.
         for (let d = 1; d <= 15; d++) {
           const s = Solar.fromYmd(y, m, d);
           if (s.getLunar().getJieQi() === name) return s;
@@ -1015,16 +1079,30 @@ export default function App() {
         return null;
       };
 
-      const startTerm = sectionalNames[selectedYueIndex];
-      const endTerm = (selectedYueIndex === 11) ? '立春' : sectionalNames[selectedYueIndex + 1];
-      const endYear = (selectedYueIndex === 11) ? year + 1 : year;
+      const safeYueIndex = Math.max(0, Math.min(11, selectedYueIndex ?? 0));
+      const startTerm = sectionalNames[safeYueIndex] || '立春';
+      const endTerm = (safeYueIndex === 11) ? '立春' : (sectionalNames[safeYueIndex + 1] || '立春');
+      // For month 11 (小寒), both start (小寒) and end (立春) are in the next Gregorian year (year + 1).
+      // For month 10 (大雪), start (大雪) is in year, and end (小寒) is in the next Gregorian year (year + 1).
+      const startYear = (safeYueIndex === 11) ? year + 1 : year;
+      const endYear = (safeYueIndex >= 10) ? year + 1 : year;
 
-      let startSolar = findTerm(year, startTerm);
+      let startSolar = findTerm(startYear, startTerm);
       let endSolar = findTerm(endYear, endTerm);
 
       // Fallbacks if terms not found (extremely rare)
-      if (!startSolar) startSolar = Solar.fromYmd(year, (selectedYueIndex + 1) % 12 + 1, 4);
-      if (!endSolar) endSolar = Solar.fromYmd(endYear, (selectedYueIndex + 2) % 12 + 1, 4);
+      if (!startSolar) {
+        const m = (safeYueIndex + 1) % 12 + 1;
+        startSolar = Solar.fromYmd(startYear, m, 4);
+      }
+      if (!endSolar) {
+        const m = (safeYueIndex + 2) % 12 + 1;
+        endSolar = Solar.fromYmd(endYear, m, 4);
+      }
+
+      if (startSolar.getJulianDay() >= endSolar.getJulianDay()) {
+        endSolar = startSolar.next(30);
+      }
 
       const list = [];
       let curr = startSolar;
@@ -1036,19 +1114,137 @@ export default function App() {
         list.push({
           getDay: () => curr.getDay(),
           getGanZhi: () => l.getEightChar().getDay(),
-          getLunarDay: () => l.getDayInChinese() // This returns "初一", "初二" etc. correctly
+          getLunarDay: () => l.getDayInChinese(),
+          getDateStr: () => curr.toYmd()
         });
         curr = curr.next(1);
         count++;
       }
+
+      if (list.length > 0) {
+        return list;
+      }
+
+      // Safe fallback if loop didn't produce items
+      let fallbackCurr = startSolar;
+      for (let i = 0; i < 30; i++) {
+        const l = fallbackCurr.getLunar();
+        list.push({
+          getDay: () => fallbackCurr.getDay(),
+          getGanZhi: () => l.getEightChar().getDay(),
+          getLunarDay: () => l.getDayInChinese(),
+          getDateStr: () => fallbackCurr.toYmd()
+        });
+        fallbackCurr = fallbackCurr.next(1);
+      }
       return list;
     } catch (e) {
       console.error("LiuRi Calculation Error:", e);
-      return [{ getDay: () => 1, getGanZhi: () => "甲子", getLunarDay: () => "初一" }];
+      return [{ getDay: () => 1, getGanZhi: () => "甲子", getLunarDay: () => "初一", getDateStr: () => "" }];
     }
   }, [currentLiuNian, selectedYueIndex]);
 
-  const currentLiuRi = liuRiList[selectedRiIndex] || liuRiList[0];
+  const defaultLiuRi = {
+    getDay: () => 1,
+    getGanZhi: () => "甲子",
+    getLunarDay: () => "初一",
+    getDateStr: () => ""
+  };
+
+  const currentLiuRi = (liuRiList && liuRiList.length > 0)
+    ? (liuRiList[selectedRiIndex] || liuRiList[0] || defaultLiuRi)
+    : defaultLiuRi;
+
+  // Auto-sync Bazi to today's year, month, and day
+  const syncBaziToToday = useCallback((overrideData?: BaziData | null) => {
+    const targetData = overrideData || data;
+    if (!targetData) return;
+
+    try {
+      const today = new Date();
+      const nowSolar = Solar.fromDate(today);
+      const currentYear = nowSolar.getYear();
+      const dyList = targetData.yun.getDaYun();
+
+      // 1. Locate which DaYun contains today's year
+      let targetDaYunIdx = 1;
+      let found = false;
+      for (let i = 0; i < dyList.length; i++) {
+        const dy = dyList[i];
+        if (currentYear >= dy.getStartYear() && currentYear <= dy.getEndYear()) {
+          targetDaYunIdx = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        if (dyList[1] && currentYear < dyList[1].getStartYear()) {
+          targetDaYunIdx = 0;
+        } else if (dyList.length > 0) {
+          targetDaYunIdx = Math.max(0, dyList.length - 1);
+        }
+      }
+
+      setSelectedDaYunIndex(targetDaYunIdx);
+      setSelectedNianYear(currentYear);
+
+      // 2. Locate current Bazi month index (0 to 11 based on 24 solar terms)
+      const prevJie = nowSolar.getLunar().getPrevJie().getName();
+      const sectionalNames = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+      const yueIdx = sectionalNames.indexOf(prevJie);
+      const targetYueIdx = yueIdx >= 0 ? yueIdx : 0;
+      setSelectedYueIndex(targetYueIdx);
+
+      // 3. Locate day index in that month
+      const findTerm = (y: number, name: string) => {
+        const monthMap: Record<string, number> = { '立春': 2, '惊蛰': 3, '清明': 4, '立夏': 5, '芒种': 6, '小暑': 7, '立秋': 8, '白露': 9, '寒露': 10, '立冬': 11, '大雪': 12, '小寒': 1 };
+        const m = monthMap[name];
+        if (!m) return null;
+        for (let day = 1; day <= 15; day++) {
+          const s = Solar.fromYmd(y, m, day);
+          if (s.getLunar().getJieQi() === name) return s;
+        }
+        return null;
+      };
+
+      const startYear = (targetYueIdx === 11) ? currentYear + 1 : currentYear;
+      let startSolar = findTerm(startYear, sectionalNames[targetYueIdx]);
+      if (!startSolar) {
+        const m = (targetYueIdx + 1) % 12 + 1;
+        startSolar = Solar.fromYmd(startYear, m, 4);
+      }
+
+      const todayDateOnly = Solar.fromYmd(nowSolar.getYear(), nowSolar.getMonth(), nowSolar.getDay());
+      const dayDiff = todayDateOnly.subtract(startSolar);
+      const targetRiIdx = Math.max(0, Math.min(31, dayDiff));
+      setSelectedRiIndex(targetRiIdx);
+    } catch (err) {
+      console.error('Failed to sync Bazi to today:', err);
+    }
+  }, [data]);
+
+  // Synchronize to current year/month/day on tab switch or client switch
+  const lastSyncedKeyRef = useRef<string>('');
+
+  useEffect(() => {
+    if (activeTab === 'bazi' && data) {
+      const key = `${currentAnalysisClientId || 'default'}_${birthDate}_${birthTime}_${gender}_${activeTab}`;
+      if (lastSyncedKeyRef.current !== key) {
+        lastSyncedKeyRef.current = key;
+        syncBaziToToday(data);
+      }
+    } else if (activeTab !== 'bazi') {
+      lastSyncedKeyRef.current = '';
+    }
+  }, [activeTab, currentAnalysisClientId, birthDate, birthTime, gender, data, syncBaziToToday]);
+
+  // Auto-scroll the active LiuRi item into view
+  useEffect(() => {
+    const el = document.getElementById(`liuri-item-${selectedRiIndex}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+    }
+  }, [selectedRiIndex, selectedYueIndex]);
 
   const { elementsCount, taiYuan, mingGong, shenGong } = useMemo(() => {
     if (!eightChar) {
@@ -1944,7 +2140,10 @@ export default function App() {
             {/* TAB NAVIGATION */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 shadow-inner">
               <button 
-                onClick={() => setActiveTab('bazi')}
+                onClick={() => {
+                  setActiveTab('bazi');
+                  syncBaziToToday();
+                }}
                 className={cn(
                   "min-h-[44px] py-2.5 text-xs sm:text-sm font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer",
                   activeTab === 'bazi' ? "bg-gold text-zinc-950 shadow-lg" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50"
@@ -1992,7 +2191,7 @@ export default function App() {
                   {/* Row 1: Headers */}
                   <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
                     <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold border-r border-zinc-700 text-zinc-400 whitespace-nowrap">日期</div>
-                    {["时柱", "日柱", "月柱", "年柱", "大运", "流年"].map((label, idx) => (
+                    {["时柱", "日柱", "月柱", "年柱", selectedDaYunIndex === 0 ? "小运" : "大运", "流年"].map((label, idx) => (
                       <div key={idx} className="flex-1 flex items-center justify-center text-xs font-bold border-r border-zinc-700 last:border-r-0 whitespace-nowrap">{label}</div>
                     ))}
                   </div>
@@ -2002,10 +2201,15 @@ export default function App() {
                     <div className="w-12 sm:w-16 flex items-center justify-center text-[10px] font-bold border-r border-zinc-700 leading-tight text-zinc-500">歳<br />年</div>
                     <div className="flex-[4] flex items-center justify-center border-r border-zinc-700 text-center px-1"></div>
                     <div className="flex-1 flex items-center justify-center border-r border-zinc-700 text-center leading-tight">
-                      <div className="text-[11px] font-bold text-white">{currentDaYun.getStartAge()}歳<br />{currentDaYun.getStartYear()}</div>
+                      <div className="text-[11px] font-bold text-white whitespace-pre-wrap">
+                        {selectedDaYunIndex === 0 
+                          ? `${currentLiuNian.getAge()}岁\n小运` 
+                          : `${currentDaYun.getStartAge()}歳\n${currentDaYun.getStartYear()}`
+                        }
+                      </div>
                     </div>
                     <div className="flex-1 flex items-center justify-center text-center leading-tight">
-                      <div className="text-[11px] font-bold text-white">{currentLiuNian.getYear() - solar.getYear() + 1}歳<br />{currentLiuNian.getYear()}</div>
+                      <div className="text-[11px] font-bold text-white whitespace-pre-wrap">{currentLiuNian.getYear() - solar.getYear() + 1}岁<br />{currentLiuNian.getYear()}</div>
                     </div>
                   </div>
 
@@ -2017,7 +2221,7 @@ export default function App() {
                       { label: "日", gan: eightChar.getDayGan(), ss: "日主", isDayMaster: true },
                       { label: "月", gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
                       { label: "年", gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
-                      { gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
+                      { gan: daYunGan, ss: daYunGan ? getShiShenFromGans(data.dayGan, daYunGan) : '' },
                       { gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
                     ].map((item, idx) => (
                       <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
@@ -2038,7 +2242,7 @@ export default function App() {
                       { label: "日", zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
                       { label: "月", zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
                       { label: "年", zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
-                      { zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
+                      { zhi: daYunZhi, sss: daYunZhi ? getShiShenFromZhi(data.dayGan, daYunZhi) : [] },
                       { zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
                     ].map((item, idx) => (
                       <div key={idx} className="flex-1 flex items-center justify-center relative py-4 sm:py-6 border-r border-zinc-800 last:border-r-0">
@@ -2058,7 +2262,7 @@ export default function App() {
                       { zhi: eightChar.getDayZhi() },
                       { zhi: eightChar.getMonthZhi() },
                       { zhi: eightChar.getYearZhi() },
-                      { zhi: currentDaYun.getGanZhi().substring(1,2) },
+                      { zhi: daYunZhi },
                       { zhi: currentLiuNian.getGanZhi().substring(1,2) },
                     ].map((item, idx) => {
                       const hides = idx < 4 ? (ZHI_HIDE_GAN[item.zhi] || []) : [];
@@ -2152,34 +2356,85 @@ export default function App() {
                   
                   {/* Section 1: Da Yun Selector */}
                   <div className="flex flex-col p-1.5">
-                    <div className="flex items-center gap-1.5 mb-1 px-0.5">
+                    <div className="flex items-center justify-between gap-1.5 mb-1 px-0.5">
+                      <div className="flex items-center gap-1.5">
                         <span className="text-xs text-zinc-100 font-bold uppercase tracking-wider">大運</span>
                         <span className="text-[9px] text-zinc-500 font-bold">起運: {yun.getStartYear()}年{yun.getStartMonth()}月</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => syncBaziToToday()}
+                        className="text-[10px] text-gold hover:text-amber-300 font-bold px-2 py-0.5 rounded bg-gold/10 hover:bg-gold/20 border border-gold/30 transition-all flex items-center gap-1 cursor-pointer"
+                        title="自动直接选择从今年今月今日开始看"
+                      >
+                        <span>📅</span>
+                        <span>回到今天</span>
+                      </button>
                     </div>
                     
                     <div className="grid grid-cols-6 sm:grid-cols-12 gap-1 px-0.5">
-                        <div className="flex flex-col rounded border border-zinc-800 bg-zinc-950/30 overflow-hidden">
-                          <div className="bg-zinc-800/80 text-[10px] font-bold text-white text-center py-1 border-b border-zinc-800 leading-tight">
-                              1-{(daYunList[1]?.getStartAge() || 10) - 1}
-                          </div>
-                          <div className="flex-1 flex flex-col items-center justify-center p-0.5 leading-none">
-                              <div className="text-[10px] font-serif font-bold text-zinc-500">小</div>
-                              <div className="text-[10px] font-serif font-bold text-zinc-500">運</div>
-                          </div>
-                        </div>
+                        {/* 小运 (童运/起运前) Button */}
+                        {daYunList[0] && (
+                          <button 
+                            type="button"
+                            id="dayun-btn-0"
+                            onClick={() => {
+                              setSelectedDaYunIndex(0);
+                              const ln0 = daYunList[0].getLiuNian();
+                              if (ln0 && ln0.length > 0) {
+                                const inChildhood = ln0.some(ln => ln.getYear() === selectedNianYear);
+                                if (!inChildhood) {
+                                  setSelectedNianYear(ln0[0].getYear());
+                                  setSelectedYueIndex(0);
+                                  setSelectedRiIndex(0);
+                                }
+                              }
+                            }}
+                            className={cn(
+                              "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
+                              selectedDaYunIndex === 0 
+                                ? "bg-gold/10 border-gold ring-1 ring-gold/50" 
+                                : "bg-zinc-950/40 border-zinc-800 hover:border-zinc-700"
+                            )}
+                          >
+                            <div className={cn(
+                              "text-[8px] sm:text-[10px] font-bold text-center py-1 border-b leading-tight transition-colors", 
+                              selectedDaYunIndex === 0 ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800"
+                            )}>
+                              {daYunList[0].getStartAge()}-{daYunList[0].getEndAge()}<br className="sm:hidden" />歳
+                            </div>
+                            <div className="flex-1 flex flex-col items-center justify-center p-0.5 leading-none">
+                              <div className={cn("text-[11px] sm:text-xs font-serif font-bold", selectedDaYunIndex === 0 ? "text-gold" : "text-zinc-400")}>小</div>
+                              <div className={cn("text-[11px] sm:text-xs font-serif font-bold", selectedDaYunIndex === 0 ? "text-gold" : "text-zinc-400")}>運</div>
+                            </div>
+                          </button>
+                        )}
 
                         {daYunList.slice(1).map((dy, idx) => {
-                          const isActive = selectedDaYunIndex === idx + 1;
+                          const dyIdx = idx + 1;
+                          const isActive = selectedDaYunIndex === dyIdx;
                           const gan = dy.getGanZhi().substring(0,1);
                           const zhi = dy.getGanZhi().substring(1,2);
                           return (
                             <button 
                               key={idx}
-                              id={`dayun-btn-${idx}`}
-                              onClick={() => setSelectedDaYunIndex(idx + 1)}
+                              type="button"
+                              id={`dayun-btn-${dyIdx}`}
+                              onClick={() => {
+                                setSelectedDaYunIndex(dyIdx);
+                                const lns = dy.getLiuNian();
+                                if (lns && lns.length > 0) {
+                                  const inRange = lns.some(ln => ln.getYear() === selectedNianYear);
+                                  if (!inRange) {
+                                    setSelectedNianYear(lns[0].getYear());
+                                    setSelectedYueIndex(0);
+                                    setSelectedRiIndex(0);
+                                  }
+                                }
+                              }}
                               className={cn(
                                 "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
-                                isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800"
+                                isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800 hover:border-zinc-700"
                               )}
                             >
                               <div className={cn("text-[8px] sm:text-[10px] font-bold text-center py-1 border-b leading-tight transition-colors", isActive ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800")}>
@@ -2199,8 +2454,18 @@ export default function App() {
 
                   {/* Section 2: Liu Nian Selector */}
                   <div className="flex flex-col p-1.5">
-                    <div className="flex items-center gap-1.5 mb-1 px-0.5">
-                        <span className="text-xs text-zinc-100 font-bold uppercase tracking-wider">流年</span>
+                    <div className="flex items-center justify-between gap-1.5 mb-1 px-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-zinc-100 font-bold uppercase tracking-wider">
+                          {selectedDaYunIndex === 0 ? "流年 (小运)" : "流年"}
+                        </span>
+                        {selectedDaYunIndex === 0 && (
+                          <span className="text-[9px] text-amber-400 font-bold">起运前童运逐年推算</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        当前: <b className="text-gold font-bold">{selectedNianYear}年</b>
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-5 sm:grid-cols-10 gap-1 px-0.5">
@@ -2208,9 +2473,17 @@ export default function App() {
                           const isActive = selectedNianYear === ln.getYear();
                           const gan = ln.getGanZhi().substring(0,1);
                           const zhi = ln.getGanZhi().substring(1,2);
+
+                          // If in XiaoYun, get the childhood XiaoYun GanZhi for this year
+                          const xyObj = (selectedDaYunIndex === 0 && daYunList[0]?.getXiaoYun)
+                            ? daYunList[0].getXiaoYun().find((x: any) => x.getYear() === ln.getYear())
+                            : null;
+                          const xyGanZhi = xyObj ? xyObj.getGanZhi() : '';
+
                           return (
                             <button 
                               key={idx}
+                              type="button"
                               id={`liunian-btn-${idx}`}
                               onClick={() => {
                                 setSelectedNianYear(ln.getYear());
@@ -2219,7 +2492,7 @@ export default function App() {
                               }}
                               className={cn(
                                 "flex flex-col rounded border transition-all cursor-pointer overflow-hidden",
-                                isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800"
+                                isActive ? "bg-gold/10 border-gold ring-1 ring-gold/50" : "bg-zinc-950/40 border-zinc-800 hover:border-zinc-700"
                               )}
                             >
                               <div className={cn("text-[10px] font-bold text-center py-1 border-b leading-none transition-colors", isActive ? "bg-gold/20 text-white border-gold/30" : "bg-zinc-800/50 text-white border-zinc-800")}>
@@ -2229,6 +2502,11 @@ export default function App() {
                                 <span className={cn("text-lg font-serif font-bold", getBaziColorClass(gan))}>{gan}</span>
                                 <span className={cn("text-lg font-serif font-bold", getBaziColorClass(zhi))}>{zhi}</span>
                               </div>
+                              {xyGanZhi && (
+                                <div className={cn("text-[8px] py-0.5 text-center font-mono border-t border-zinc-800/60 leading-none", isActive ? "text-amber-200 bg-gold/10" : "text-zinc-500")}>
+                                  小运{xyGanZhi}
+                                </div>
+                              )}
                             </button>
                           );
                         })}
@@ -2244,7 +2522,7 @@ export default function App() {
                     {/* Row 1: Headers */}
                     <div className="flex bg-zinc-800 border-b border-zinc-700 h-10 sm:h-12">
                       <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 text-zinc-400 uppercase whitespace-nowrap">日期</div>
-                      {["时柱", "日柱", "月柱", "年柱", "大运", "流年", "流月", "流日"].map((label, idx) => (
+                      {["时柱", "日柱", "月柱", "年柱", selectedDaYunIndex === 0 ? "小运" : "大运", "流年", "流月", "流日"].map((label, idx) => (
                         <div key={idx} className="flex-1 flex items-center justify-center text-[10px] font-black border-r border-zinc-700 last:border-r-0 text-zinc-300 uppercase whitespace-nowrap">{label}</div>
                       ))}
                     </div>
@@ -2254,10 +2532,10 @@ export default function App() {
                       <div className="w-10 shrink-0 flex items-center justify-center text-[10px] font-bold border-r border-zinc-800 leading-tight whitespace-pre-wrap text-zinc-500 uppercase">岁\n年</div>
                       {[
                         { val: "*" }, { val: "*" }, { val: "*" }, { val: "*" },
-                        { val: `${Math.floor(currentDaYun.getStartAge())}岁\n${currentDaYun.getStartYear()}年` },
+                        { val: selectedDaYunIndex === 0 ? `${currentLiuNian.getAge()}岁\n小运` : `${Math.floor(currentDaYun.getStartAge())}岁\n${currentDaYun.getStartYear()}年` },
                         { val: `${currentLiuNian.getYear() - solar.getYear() + 1}岁\n${currentLiuNian.getYear()}年` },
                         { val: `${currentLiuYue.getIndex() + 1}月` },
-                        { val: `${(currentLiuRi as any).getLunarDay ? (currentLiuRi as any).getLunarDay() : ''}\n${currentLiuRi.getDay()}日` },
+                        { val: `${(currentLiuRi as any)?.getLunarDay ? (currentLiuRi as any).getLunarDay() : ''}\n${(currentLiuRi as any)?.getDay ? (currentLiuRi as any).getDay() : 1}日` },
                       ].map((item, idx) => (
                         <div key={idx} className="flex-1 flex items-center justify-center border-r border-zinc-800 text-center leading-tight last:border-r-0">
                           <div className="text-[10px] font-bold text-white whitespace-pre-wrap">{(item as any).val}</div>
@@ -2273,10 +2551,10 @@ export default function App() {
                         { gan: eightChar.getDayGan(), ss: "元男" },
                         { gan: eightChar.getMonthGan(), ss: eightChar.getMonthShiShenGan() },
                         { gan: eightChar.getYearGan(), ss: eightChar.getYearShiShenGan() },
-                        { gan: currentDaYun.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentDaYun.getGanZhi().substring(0,1)) },
+                        { gan: daYunGan, ss: daYunGan ? getShiShenFromGans(data.dayGan, daYunGan) : '' },
                         { gan: currentLiuNian.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuNian.getGanZhi().substring(0,1)) },
                         { gan: currentLiuYue.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuYue.getGanZhi().substring(0,1)) },
-                        { gan: currentLiuRi.getGanZhi().substring(0,1), ss: getShiShenFromGans(data.dayGan, currentLiuRi.getGanZhi().substring(0,1)) },
+                        { gan: (currentLiuRi as any)?.getGanZhi ? (currentLiuRi as any).getGanZhi().substring(0,1) : '甲', ss: getShiShenFromGans(data.dayGan, (currentLiuRi as any)?.getGanZhi ? (currentLiuRi as any).getGanZhi().substring(0,1) : '甲') },
                       ].map((item, idx) => (
                         <div key={idx} className="flex-1 flex items-center justify-center relative py-3 border-r border-zinc-800 last:border-r-0">
                           <span className={cn("text-xl sm:text-2xl font-serif font-bold", getBaziColorClass(item.gan))}>{item.gan}</span>
@@ -2295,10 +2573,10 @@ export default function App() {
                         { zhi: eightChar.getDayZhi(), sss: eightChar.getDayShiShenZhi() },
                         { zhi: eightChar.getMonthZhi(), sss: eightChar.getMonthShiShenZhi() },
                         { zhi: eightChar.getYearZhi(), sss: eightChar.getYearShiShenZhi() },
-                        { zhi: currentDaYun.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentDaYun.getGanZhi().substring(1,2)) },
+                        { zhi: daYunZhi, sss: daYunZhi ? getShiShenFromZhi(data.dayGan, daYunZhi) : [] },
                         { zhi: currentLiuNian.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuNian.getGanZhi().substring(1,2)) },
                         { zhi: currentLiuYue.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuYue.getGanZhi().substring(1,2)) },
-                        { zhi: currentLiuRi.getGanZhi().substring(1,2), sss: getShiShenFromZhi(data.dayGan, currentLiuRi.getGanZhi().substring(1,2)) },
+                        { zhi: (currentLiuRi as any)?.getGanZhi ? (currentLiuRi as any).getGanZhi().substring(1,2) : '子', sss: getShiShenFromZhi(data.dayGan, (currentLiuRi as any)?.getGanZhi ? (currentLiuRi as any).getGanZhi().substring(1,2) : '子') },
                       ].map((item, idx) => (
                         <div key={idx} className="flex-1 flex items-center justify-center relative py-3 border-r border-zinc-800 last:border-r-0">
                           <span className={cn("text-xl sm:text-2xl font-serif font-bold", getBaziColorClass(item.zhi))}>{item.zhi}</span>
@@ -2353,14 +2631,16 @@ export default function App() {
                             {/* Unified Scrollable Container */}
                             <div className="flex overflow-x-auto custom-scrollbar-grey w-full scrollbar-gutter-stable">
                                 {liuRiList.map((lr, idx) => {
+                                  if (!lr) return null;
                                   const isActive = selectedRiIndex === idx;
-                                  const gan = lr.getGanZhi().substring(0,1);
-                                  const zhi = lr.getGanZhi().substring(1,2);
-                                  const lunarDayName = lr.getLunarDay();
+                                  const gan = lr.getGanZhi ? lr.getGanZhi().substring(0,1) : '';
+                                  const zhi = lr.getGanZhi ? lr.getGanZhi().substring(1,2) : '';
+                                  const lunarDayName = lr.getLunarDay ? lr.getLunarDay() : '';
 
                                   return (
                                     <div 
                                       key={idx} 
+                                      id={`liuri-item-${idx}`}
                                       onClick={() => setSelectedRiIndex(idx)}
                                       className={cn(
                                         "min-w-[48px] sm:min-w-[60px] border-r border-zinc-800 cursor-pointer transition-colors shrink-0 flex flex-col items-center py-3",
@@ -2410,20 +2690,85 @@ export default function App() {
                       ))}
                     </div>
 
+                    {/* 2-Year Monthly Forecast Controls */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3 px-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-white uppercase tracking-wider">流月走势 (2年数据)</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gold/15 text-gold font-bold border border-gold/30">
+                          {numerologyYear}年 ~ {numerologyYear + 1}年
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="hidden sm:inline text-[10px] text-zinc-500 mr-1">👉 向右滑动查看明年12个月</span>
+                        <button
+                          type="button"
+                          onClick={() => setNumerologyYear(prev => prev - 1)}
+                          className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-bold text-[10px] border border-zinc-700 transition-colors cursor-pointer"
+                          title="查看前一年"
+                        >
+                          ◀ {numerologyYear - 1}年
+                        </button>
+                        {numerologyYear !== new Date().getFullYear() && (
+                          <button
+                            type="button"
+                            onClick={() => setNumerologyYear(new Date().getFullYear())}
+                            className="px-2 py-1 rounded bg-gold/10 hover:bg-gold/20 text-gold font-bold text-[10px] border border-gold/30 transition-colors cursor-pointer"
+                            title="重置为当前年份"
+                          >
+                            今年
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setNumerologyYear(prev => prev + 1)}
+                          className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-bold text-[10px] border border-zinc-700 transition-colors cursor-pointer"
+                          title="查看后一年"
+                        >
+                          {numerologyYear + 1}年 ▶
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="mb-8 overflow-x-auto pb-4 custom-scrollbar">
-                      <table className="w-full border-collapse border border-zinc-800">
-                        <thead>
-                          <tr className="bg-zinc-800/80">
-                            <th className="p-3 border border-zinc-700 text-xs font-black text-white sticky left-0 bg-zinc-800 z-10 min-w-16">类别</th>
+                      <table className="border-collapse border border-zinc-800 mx-auto min-w-full">
+                        <tbody>
+                          {/* Row 1: Header (类别 + Year 1 Months 1-12 + Merged Next Year Divider + Year 2 Months 1-12) */}
+                          <tr className="bg-zinc-800 text-center border-b border-zinc-700">
+                            <th className="py-2 px-3 border border-zinc-700 text-xs font-bold text-zinc-200 sticky left-0 bg-zinc-800 z-20 w-16 min-w-16 whitespace-nowrap text-center">
+                              类别
+                            </th>
+                            {/* Year 1: Months 1 - 12 */}
                             {[...Array(12)].map((_, i) => (
-                              <th key={i} className="p-3 border border-zinc-700 text-xs font-black text-white min-w-10">{i + 1}月</th>
+                              <th key={`y1-m-${i}`} className="py-2 px-1 border border-zinc-700 text-xs font-medium text-zinc-300 w-9 sm:w-10 min-w-[36px] sm:min-w-[40px] whitespace-nowrap text-center">
+                                {i + 1}月
+                              </th>
+                            ))}
+                            {/* Merged Next Year Divider: spans from 类别 row down through all 11 rows to 流月 (12 rows total!) */}
+                            <th
+                              rowSpan={12}
+                              className="py-4 px-1 border border-zinc-700 bg-zinc-900 text-center w-7 min-w-7 max-w-7 whitespace-nowrap align-middle select-none"
+                            >
+                              <div className="flex flex-col items-center justify-center h-full">
+                                <span
+                                  style={{ writingMode: 'vertical-rl', textOrientation: 'upright' }}
+                                  className="text-xs font-mono font-bold text-amber-400 tracking-widest inline-block"
+                                >
+                                  {numerologyYear + 1}年
+                                </span>
+                              </div>
+                            </th>
+                            {/* Year 2: Months 1 - 12 */}
+                            {[...Array(12)].map((_, i) => (
+                              <th key={`y2-m-${i}`} className="py-2 px-1 border border-zinc-700 text-xs font-medium text-amber-200/90 w-9 sm:w-10 min-w-[36px] sm:min-w-[40px] whitespace-nowrap text-center bg-zinc-800/60">
+                                {i + 1}月
+                              </th>
                             ))}
                           </tr>
-                        </thead>
-                        <tbody>
+
                           {(() => {
                             const coreVal = getRootDigit(birthDate);
-                            const currentYear = new Date().getFullYear();
+                            const year1 = numerologyYear;
+                            const year2 = numerologyYear + 1;
                             
                             const yearVal = (birthDate.split('-')[0] || '').replace(/[^0-9]/g, '');
                             const monthVal = (birthDate.split('-')[1] || '').replace(/[^0-9]/g, '');
@@ -2460,18 +2805,22 @@ export default function App() {
                             ];
 
                             return matrixRows.map((row, idx) => (
-                              <tr key={idx} className="hover:bg-zinc-800/30">
-                                <td className="p-3 border border-zinc-800 text-xs font-bold text-white sticky left-0 bg-zinc-900/95 z-10">{row.label}</td>
+                              <tr key={idx} className="hover:bg-zinc-800/20">
+                                <td className="py-1.5 px-3 border border-zinc-800 text-xs font-bold text-zinc-200 sticky left-0 bg-zinc-900 z-10 text-center whitespace-nowrap">
+                                  {row.label}
+                                </td>
+                                
+                                {/* Year 1 Months 1-12 */}
                                 {[...Array(12)].map((_, mIdx) => {
                                   const monthNum = mIdx + 1;
-                                  const monthlyFlowVal = getRootDigit(coreVal.toString() + currentYear.toString() + monthNum.toString());
+                                  const monthlyFlowVal = getRootDigit(coreVal.toString() + year1.toString() + monthNum.toString());
                                   const matchesBase = baseValues.includes(monthlyFlowVal);
                                   
                                   let val = 0;
                                   let isMatched = false;
 
                                   if (row.type === 'year') {
-                                    val = getRootDigit(coreVal.toString() + currentYear.toString());
+                                    val = getRootDigit(coreVal.toString() + year1.toString());
                                   } else if (row.type === 'month') {
                                     val = monthlyFlowVal;
                                     isMatched = matchesBase;
@@ -2481,21 +2830,54 @@ export default function App() {
                                   }
                                   
                                   return (
-                                    <td key={mIdx} className="p-1 border border-zinc-800 text-center">
+                                    <td key={`y1-${mIdx}`} className="p-1 border border-zinc-800 text-center whitespace-nowrap">
                                       <div className={cn(
-                                        "inline-flex items-center justify-center w-7 h-7 rounded-full transition-all duration-300",
-                                        isMatched ? "border-2 border-green-500/50 bg-green-500/10 shadow-[0_0_8px_rgba(34,197,94,0.3)]" : ""
+                                        "w-7 h-7 mx-auto flex items-center justify-center rounded-full font-mono text-sm font-semibold transition-colors",
+                                        isMatched 
+                                          ? "border-2 border-green-500 bg-green-500/15 text-green-400 font-bold shadow-[0_0_6px_rgba(34,197,94,0.3)]" 
+                                          : (row.type === 'month' ? "text-gold font-bold" : "text-zinc-400")
                                       )}>
-                                        <span className={cn(
-                                          "text-base font-black",
-                                          isMatched ? "text-green-500" : (row.type === 'month' ? "text-gold" : "text-white/40")
-                                        )}>
-                                          {val}
-                                        </span>
+                                        {val}
                                       </div>
                                     </td>
                                   );
                                 })}
+
+                                {/* Next Year Divider Cell is omitted because rowSpan={12} in the top row spans across all 11 matrix rows! */}
+
+                                {/* Year 2 Months 1-12 */}
+                                {[...Array(12)].map((_, mIdx) => {
+                                  const monthNum = mIdx + 1;
+                                  const monthlyFlowVal = getRootDigit(coreVal.toString() + year2.toString() + monthNum.toString());
+                                  const matchesBase = baseValues.includes(monthlyFlowVal);
+                                  
+                                  let val = 0;
+                                  let isMatched = false;
+
+                                  if (row.type === 'year') {
+                                    val = getRootDigit(coreVal.toString() + year2.toString());
+                                  } else if (row.type === 'month') {
+                                    val = monthlyFlowVal;
+                                    isMatched = matchesBase;
+                                  } else {
+                                    val = row.base || 0;
+                                    isMatched = val === monthlyFlowVal;
+                                  }
+                                  
+                                  return (
+                                    <td key={`y2-${mIdx}`} className="p-1 border border-zinc-800 text-center whitespace-nowrap bg-zinc-900/20">
+                                      <div className={cn(
+                                        "w-7 h-7 mx-auto flex items-center justify-center rounded-full font-mono text-sm font-semibold transition-colors",
+                                        isMatched 
+                                          ? "border-2 border-green-500 bg-green-500/15 text-green-400 font-bold shadow-[0_0_6px_rgba(34,197,94,0.3)]" 
+                                          : (row.type === 'month' ? "text-amber-300 font-bold" : "text-zinc-400")
+                                      )}>
+                                        {val}
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+
                               </tr>
                             ));
                           })()}
@@ -2815,20 +3197,32 @@ export default function App() {
 
                       <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold w-full px-2">
                          <div className="flex flex-col items-center p-2 bg-emerald-950/20 border border-emerald-900/40 rounded-lg text-emerald-400">
-                            <span className="text-[8px] text-emerald-600 uppercase font-black mb-1">上升 ASC</span>
-                            <span>{westernData.ascSign.name} {Math.floor(westernData.ascDeg)}°</span>
+                            <div className="flex items-center gap-1.5 mb-1">
+                               <span className="text-[9px] text-emerald-500 uppercase font-black">上升 ASC</span>
+                               <span className="text-[10px] text-amber-400 font-bold">外界印象</span>
+                            </div>
+                            <span className="text-zinc-100 font-bold">{westernData.ascSign.name} {Math.floor(westernData.ascDeg)}°</span>
                          </div>
                          <div className="flex flex-col items-center p-2 bg-amber-950/20 border border-amber-900/40 rounded-lg text-amber-400">
-                            <span className="text-[8px] text-amber-600 uppercase font-black mb-1">中天 MC</span>
-                            <span>{westernData.mcSign.name} {Math.floor(westernData.mcDeg)}°</span>
+                            <div className="flex items-center gap-1.5 mb-1">
+                               <span className="text-[9px] text-amber-500 uppercase font-black">中天 MC</span>
+                               <span className="text-[10px] text-amber-400 font-bold">人生目标</span>
+                            </div>
+                            <span className="text-zinc-100 font-bold">{westernData.mcSign.name} {Math.floor(westernData.mcDeg)}°</span>
                          </div>
                          <div className="flex flex-col items-center p-2 bg-rose-950/20 border border-rose-900/40 rounded-lg text-rose-400">
-                            <span className="text-[8px] text-rose-600 uppercase font-black mb-1">下降 DSC</span>
-                            <span>{westernData.dscSign.name}</span>
+                            <div className="flex items-center gap-1.5 mb-1">
+                               <span className="text-[9px] text-rose-500 uppercase font-black">下降 DSC</span>
+                               <span className="text-[10px] text-amber-400 font-bold">吸引伴侣</span>
+                            </div>
+                            <span className="text-zinc-100 font-bold">{westernData.dscSign.name}</span>
                          </div>
                          <div className="flex flex-col items-center p-2 bg-sky-950/20 border border-sky-900/40 rounded-lg text-sky-400">
-                            <span className="text-[8px] text-sky-600 uppercase font-black mb-1">天底 IC</span>
-                            <span>{westernData.icSign.name}</span>
+                            <div className="flex items-center gap-1.5 mb-1">
+                               <span className="text-[9px] text-sky-500 uppercase font-black">天底 IC</span>
+                               <span className="text-[10px] text-amber-400 font-bold">成长环境</span>
+                            </div>
+                            <span className="text-zinc-100 font-bold">{westernData.icSign.name}</span>
                          </div>
                       </div>
                     </div>
@@ -2836,21 +3230,21 @@ export default function App() {
                     {/* Aspects Section */}
                     {aspects.length > 0 && (
                       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
-                         <div className="bg-zinc-800 px-4 py-2 border-b border-zinc-700 flex items-center justify-between">
+                         <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
                             <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">相位分析 (Aspects)</span>
                             <span className="text-[9px] font-bold text-zinc-500">共 {aspects.length} 个主要相位</span>
                          </div>
-                         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto custom-scrollbar">
+                         <div className="p-2.5 grid grid-cols-2 gap-1.5 sm:gap-2 max-h-72 overflow-y-auto custom-scrollbar">
                             {aspects.map((asp, idx) => (
-                               <div key={idx} className="bg-black/30 border border-zinc-800/50 p-2 rounded-lg flex flex-col gap-1">
+                               <div key={idx} className="bg-black/40 border border-zinc-800/60 px-2 py-1.5 rounded-lg flex flex-col gap-0.5 hover:border-zinc-700 transition-colors">
                                   <div className="flex items-center justify-between">
-                                     <span className="text-[11px] font-black text-white">{asp.p1.symbol} {asp.p1.name}</span>
-                                     <span className={cn("text-base font-bold", asp.aspect.color)}>{asp.aspect.symbol}</span>
-                                     <span className="text-[11px] font-black text-white">{asp.p2.name} {asp.p2.symbol}</span>
+                                     <span className="text-[11px] font-bold text-zinc-200 truncate">{asp.p1.symbol} {asp.p1.name}</span>
+                                     <span className={cn("text-xs font-black mx-1 shrink-0", asp.aspect.color)}>{asp.aspect.symbol}</span>
+                                     <span className="text-[11px] font-bold text-zinc-200 truncate">{asp.p2.name} {asp.p2.symbol}</span>
                                   </div>
-                                  <div className="flex justify-between items-center px-1">
-                                    <span className="text-[8px] font-bold text-zinc-500">{asp.aspect.name}</span>
-                                    <span className="text-[8px] font-mono text-zinc-600">Err: {Math.abs(asp.diff - asp.aspect.angle).toFixed(1)}°</span>
+                                  <div className="flex justify-between items-center text-[9px] text-zinc-400 pt-0.5">
+                                    <span className="font-medium text-zinc-300">{asp.aspect.name}</span>
+                                    <span className="font-mono text-zinc-500">容 {Math.abs(asp.diff - asp.aspect.angle).toFixed(1)}°</span>
                                   </div>
                                </div>
                             ))}
@@ -2860,45 +3254,53 @@ export default function App() {
 
                     {/* Planets Table */}
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
-                       <div className="bg-zinc-800 px-4 py-2 border-b border-zinc-700">
+                       <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
                           <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">行星位置 (Planet Positions)</span>
+                          <span className="text-[9px] font-bold text-zinc-500">共 {westernData.planets.length} 颗星体</span>
                        </div>
-                       <table className="w-full border-collapse">
-                          <thead>
-                             <tr className="bg-zinc-900/50 text-[10px] text-zinc-500 font-bold border-b border-zinc-800 text-white">
-                                <th className="p-2 text-left">行星</th>
-                                <th className="p-2 text-left">落入星座</th>
-                                <th className="p-2 text-left">度数</th>
-                                <th className="p-2 text-center">宫位</th>
-                             </tr>
-                          </thead>
-                          <tbody>
-                             {westernData.planets.map((p, i) => (
-                                <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
-                                   <td className="p-2 whitespace-nowrap">
-                                      <div className="flex items-center gap-2 flex-nowrap">
-                                         <span className="text-xl text-gold pb-1 shrink-0">{p.symbol}</span>
-                                         <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
-                                            <span className="text-sm font-bold text-white whitespace-nowrap">{p.name}</span>
-                                            {p.isRetrograde && <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-800/80 font-black uppercase shrink-0 whitespace-nowrap leading-none">Retrograde 逆行</span>}
-                                         </div>
-                                      </div>
-                                   </td>
-                                   <td className="p-2 text-xs font-medium text-zinc-300">
-                                      {p.sign.name} <span className="text-zinc-500">({p.sign.eng})</span>
-                                   </td>
-                                   <td className="p-2 text-xs font-mono text-zinc-400">
-                                      {Math.floor(p.degree)}° {Math.floor((p.degree % 1) * 60)}'
-                                   </td>
-                                   <td className="p-2 text-center">
-                                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 text-[10px] font-black text-gold">
-                                         {p.house}
-                                      </span>
-                                   </td>
+                       <div className="w-full">
+                          <table className="w-full border-collapse text-left table-fixed">
+                             <thead>
+                                <tr className="bg-zinc-950/60 text-[10px] sm:text-[11px] text-zinc-400 font-bold border-b border-zinc-800">
+                                   <th className="py-2 px-1.5 sm:px-3 text-left w-[34%]">行星</th>
+                                   <th className="py-2 px-1 sm:px-2 text-left w-[26%]">星座</th>
+                                   <th className="py-2 px-1 sm:px-2 text-left w-[22%]">度数</th>
+                                   <th className="py-2 px-1 sm:px-2 text-center w-[18%]">宫位</th>
                                 </tr>
-                             ))}
-                          </tbody>
-                       </table>
+                             </thead>
+                             <tbody>
+                                {westernData.planets.map((p, i) => (
+                                   <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                                      <td className="py-1.5 px-1.5 sm:px-3">
+                                         <div className="flex items-center gap-1 sm:gap-1.5">
+                                            <span className="text-base sm:text-lg text-gold shrink-0 select-none">{p.symbol}</span>
+                                            <span className="text-xs sm:text-sm font-bold text-white truncate">{p.name}</span>
+                                            {p.isRetrograde && (
+                                               <span className="text-[8px] sm:text-[9px] px-1 py-0.2 rounded bg-rose-950/80 text-rose-300 border border-rose-800/80 font-bold tracking-tight shrink-0">
+                                                  逆
+                                               </span>
+                                            )}
+                                         </div>
+                                      </td>
+                                      <td className="py-1.5 px-1 sm:px-2">
+                                         <div className="flex items-baseline gap-1 truncate">
+                                            <span className="text-[11px] sm:text-xs font-bold text-zinc-200">{p.sign.name}</span>
+                                            <span className="hidden min-[400px]:inline text-[9px] text-zinc-500 font-sans">({p.sign.eng})</span>
+                                         </div>
+                                      </td>
+                                      <td className="py-1.5 px-1 sm:px-2 text-[10px] sm:text-xs font-mono font-medium text-amber-200/90 whitespace-nowrap">
+                                         {Math.floor(p.degree)}°{String(Math.floor((p.degree % 1) * 60)).padStart(2, '0')}'
+                                      </td>
+                                      <td className="py-1.5 px-1 sm:px-2 text-center">
+                                         <span className="inline-flex items-center justify-center px-1.5 py-0.5 min-w-[22px] h-5 rounded bg-zinc-800/90 border border-gold/30 text-[10px] sm:text-xs font-bold text-gold">
+                                            {p.house}宫
+                                         </span>
+                                      </td>
+                                   </tr>
+                                ))}
+                             </tbody>
+                          </table>
+                       </div>
                     </div>
                   </>
                 )}
