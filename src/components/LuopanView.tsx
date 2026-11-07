@@ -270,7 +270,7 @@ export default function LuopanView({ onOpenMenu, lang = 'zh', onToggleLang }: Lu
           
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-white tracking-wide truncate">
-              {lang === 'zh' ? '风水罗盘' : 'Feng Shui Luopan'}
+              {lang === 'zh' ? '' : ''}
             </h1>
             <span className="text-[11px] bg-gold/20 text-gold border border-gold/40 px-2 py-0.5 rounded-full font-black shrink-0">
               
