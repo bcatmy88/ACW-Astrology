@@ -86,18 +86,18 @@ const WESTERN_PLANETS = [
 
 // 泰式十二神煞 (包含泰文、英文、中文、图标及颜色)
 const THAI_DESTINY_SYMBOLS = [
-  { id: 0, thai: "เจดีย์", eng: "Chedi (Pagoda)", name: "佛塔", desc: "福德安泰", icon: Mountain, color: "text-emerald-400", hex: "#34d399" },
-  { id: 1, thai: "นาคราช", eng: "Nakkarat (Naga)", name: "龙王", desc: "权势聚财", icon: Zap, color: "text-blue-400", hex: "#60a5fa" },
-  { id: 2, thai: "แม่มด", eng: "Mae Mod (Sorceress)", name: "女巫", desc: "灵感魅力", icon: Sparkles, color: "text-purple-400", hex: "#c084fc" },
-  { id: 3, thai: "พ่อหมอ", eng: "Pho Mo (Old Doctor)", name: "神医", desc: "贵人智慧", icon: HeartPulse, color: "text-rose-400", hex: "#fb7185" },
-  { id: 4, thai: "คนต้องขอดา", eng: "Khon Tong Kho Ka", name: "枷锁", desc: "韬晦自立", icon: Link, color: "text-zinc-500", hex: "#71717a" },
-  { id: 5, thai: "เทวดาขี่เต่า", eng: "Thevada Khi Tao", name: "仙人", desc: "稳健长青", icon: ShieldQuestion, color: "text-amber-400", hex: "#fbbf24" },
-  { id: 6, thai: "ฉัตรทอง", eng: "Chat Thong", name: "金伞", desc: "名盛显荣", icon: Crown, color: "text-[#d4af37]", hex: "#d4af37" },
-  { id: 7, thai: "ราหู", eng: "Rahu", name: "罗睺", desc: "破局变迁", icon: CloudLightning, color: "text-rose-500", hex: "#f43f5e" },
-  { id: 8, thai: "ปราสาท", eng: "Prasat (Palace)", name: "城堡", desc: "晋升立业", icon: Trophy, color: "text-amber-300", hex: "#fcd34d" },
-  { id: 9, thai: "เรือนหลวง", eng: "Ruean Luang", name: "皇家府第", desc: "荣禄安康", icon: Home, color: "text-indigo-400", hex: "#818cf8" },
-  { id: 10, thai: "คนคอขาด", eng: "Khon Kho Khat", name: "断颈", desc: "慎行避险", icon: Skull, color: "text-red-500", hex: "#ef4444" },
-  { id: 11, thai: "ฉัตรเงิน", eng: "Chat Ngoen", name: "银伞", desc: "天神护持", icon: Shield, color: "text-zinc-300", hex: "#d4d4d8" },
+  { id: 0, thai: "เจดีย์", eng: "Chedi (Pagoda)", name: "佛塔", desc: "福德安泰", icon: Mountain, color: "text-emerald-400", hex: "#34d399", image: "/assets/thai_houses/house_0.png" },
+  { id: 1, thai: "นาคราช", eng: "Nakkarat (Naga)", name: "龙王", desc: "权势聚财", icon: Zap, color: "text-blue-400", hex: "#60a5fa", image: "/assets/thai_houses/house_1.png" },
+  { id: 2, thai: "แม่มด", eng: "Mae Mod (Sorceress)", name: "女巫", desc: "灵感魅力", icon: Sparkles, color: "text-purple-400", hex: "#c084fc", image: "/assets/thai_houses/house_2.png" },
+  { id: 3, thai: "พ่อหมอ", eng: "Pho Mo (Old Doctor)", name: "神医", desc: "贵人智慧", icon: HeartPulse, color: "text-rose-400", hex: "#fb7185", image: "/assets/thai_houses/house_3.png" },
+  { id: 4, thai: "คนต้องขอดา", eng: "Khon Tong Kho Ka", name: "枷锁", desc: "韬晦自立", icon: Link, color: "text-zinc-500", hex: "#71717a", image: "/assets/thai_houses/house_4.png" },
+  { id: 5, thai: "เทวดาขี่เต่า", eng: "Thevada Khi Tao", name: "仙人", desc: "稳健长青", icon: ShieldQuestion, color: "text-amber-400", hex: "#fbbf24", image: "/assets/thai_houses/house_5.png" },
+  { id: 6, thai: "ฉัตรทอง", eng: "Chat Thong", name: "金伞", desc: "名盛显荣", icon: Crown, color: "text-[#d4af37]", hex: "#d4af37", image: "/assets/thai_houses/house_6.png" },
+  { id: 7, thai: "ราหู", eng: "Rahu", name: "罗睺", desc: "破局变迁", icon: CloudLightning, color: "text-rose-500", hex: "#f43f5e", image: "/assets/thai_houses/house_7.png" },
+  { id: 8, thai: "ปราสาท", eng: "Prasat (Palace)", name: "城堡", desc: "晋升立业", icon: Trophy, color: "text-amber-300", hex: "#fcd34d", image: "/assets/thai_houses/house_8.png" },
+  { id: 9, thai: "เรือนหลวง", eng: "Ruean Luang", name: "皇家府第", desc: "荣禄安康", icon: Home, color: "text-indigo-400", hex: "#818cf8", image: "/assets/thai_houses/house_9.png" },
+  { id: 10, thai: "คนคอขาด", eng: "Khon Kho Khat", name: "断颈", desc: "慎行避险", icon: Skull, color: "text-red-500", hex: "#ef4444", image: "/assets/thai_houses/house_10.png" },
+  { id: 11, thai: "ฉัตรเงิน", eng: "Chat Ngoen", name: "银伞", desc: "天神护持", icon: Shield, color: "text-zinc-300", hex: "#d4d4d8", image: "/assets/thai_houses/house_11.png" },
 ];
 
 // 数字学 NUMEROLOGY 矩阵渲染组件 (匹配用户需求：字体与宽度自动响应，防换行压缩)
@@ -366,9 +366,10 @@ function ThaiDestinyWheelView({
                     isActive ? 'border-2 scale-110' : ''
                   }`}
                 >
-                  <IconC 
-                    style={{ color: isActive ? '#facc15' : '#71717a' }}
-                    className="w-3.5 h-3.5 sm:w-4 sm:h-4" 
+                  <img 
+                    src={sym.image} 
+                    alt={sym.thai}
+                    className="w-4 h-4 sm:w-5 sm:h-5 object-contain" 
                   />
                 </div>
 
@@ -404,15 +405,11 @@ function ThaiDestinyWheelView({
             }}
             className="rounded-full border-2 flex flex-col items-center justify-center p-1.5 z-30 text-center"
           >
-            {(() => {
-              const ActiveIcon = activeThaiSymbol.icon;
-              return (
-                <ActiveIcon 
-                  style={{ color: activeThaiSymbol.hex }}
-                  className="w-6 h-6 sm:w-7 sm:h-7 drop-shadow-md" 
-                />
-              );
-            })()}
+            <img 
+              src={activeThaiSymbol.image} 
+              alt={activeThaiSymbol.thai}
+              className="w-8 h-8 sm:w-9 sm:h-9 object-contain drop-shadow" 
+            />
             <span className="text-xs sm:text-sm font-black text-white leading-tight mt-1 truncate max-w-full">
               {activeThaiSymbol.thai}
             </span>

@@ -41,13 +41,22 @@ import {
   Bell,
   Loader2,
   FileText,
-  Check
+  Check,
+  Orbit,
+  Compass
 } from 'lucide-react';
 import * as Astronomy from 'astronomy-engine';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { SavedClient, CaseItem, NoteItem, AppointmentItem, BackupData, AppLanguage } from './types';
 import { COUNTRY_CODES, parsePhoneNumber, combinePhoneNumber, buildWhatsAppUrl } from './utils/phoneUtils';
+import { calculatePillarShenSha, type BaziPillarsContext, type ShenShaItem } from './utils/baziShenSha';
+import { 
+  calculateTransitPlanets, 
+  calculateTransitToNatalAspects, 
+  type TransitPlanet, 
+  type TransitAspect 
+} from './utils/astrologyTransits';
 import PendingCasesView from './components/PendingCasesView';
 import NotesView from './components/NotesView';
 import BackupView from './components/BackupView';
@@ -56,6 +65,7 @@ import SettingsView from './components/SettingsView';
 import LanguageToggle from './components/LanguageToggle';
 import NotificationModal from './components/NotificationModal';
 import PdfShareModal from './components/PdfShareModal';
+import LuopanView from './components/LuopanView';
 
 // --- Types ---
 interface BaziData {
@@ -104,6 +114,39 @@ const SHI_SHEN_MAP: Record<string, string> = {
   '癸甲': '伤官', '癸乙': '食神', '癸丙': '正财', '癸丁': '偏财', '癸戊': '正官', '癸己': '七杀', '癸庚': '正印', '癸辛': '偏印', '癸壬': '劫财', '癸癸': '比肩',
 };
 
+// Realtime LiuYue (流月) helper with solar term day awareness (立冬, 大雪, etc.)
+const getRealtimeLiuYue = (nowDate: Date = new Date()): string => {
+  try {
+    const solar = Solar.fromDate(nowDate);
+    const lunar = solar.getLunar();
+    // wholeDay = true ensures on the day of the solar term (e.g. 立冬), it transitions to the new month
+    const currentJie = lunar.getPrevJie(true).getName();
+    const sectionalNames = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+    const yueIdx = sectionalNames.indexOf(currentJie);
+    const safeIdx = yueIdx >= 0 ? yueIdx : 0;
+    
+    const yearGan = lunar.getEightChar().getYear().substring(0, 1);
+    const monthStartGanMap: Record<string, string> = {
+      '甲': '丙', '己': '丙',
+      '乙': '戊', '庚': '戊',
+      '丙': '庚', '辛': '庚',
+      '丁': '壬', '壬': '壬',
+      '戊': '甲', '癸': '甲'
+    };
+    const gans = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+    const zhis = ['寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥', '子', '丑'];
+    
+    const startGan = monthStartGanMap[yearGan] || '丙';
+    const startGanIdx = gans.indexOf(startGan);
+    
+    const gan = gans[(startGanIdx + safeIdx) % 10];
+    const zhi = zhis[safeIdx % 12];
+    return `${gan}${zhi}`;
+  } catch {
+    return '己亥';
+  }
+};
+
 const ZODIAC_SIGNS = [
   { name: '白羊座', symbol: '♈︎', eng: 'Aries' },
   { name: '金牛座', symbol: '♉︎', eng: 'Taurus' },
@@ -133,18 +176,18 @@ const WESTERN_PLANETS = [
 ];
 
 const THAI_DESTINY_SYMBOLS = [
-  { id: 0, name: "เจดีย์", meaning: "Chedi (Pagoda)", desc: "Peace, success in small things, merit. 成功、平静、功德。", icon: "Mountain", color: "text-emerald-400" },
-  { id: 1, name: "นาคราช", meaning: "Nakkarat (Naga)", desc: "Power, influence, hidden wealth. 权利、影响力、意外之财。", icon: "Zap", color: "text-blue-400" },
-  { id: 2, name: "แม่มด", meaning: "Mae Mod (Sorceress)", desc: "Mystery, charm, hidden dangers. 神秘、魅力、隐藏的危险。", icon: "Sparkles", color: "text-purple-400" },
-  { id: 3, name: "พ่อหมอ", meaning: "Pho Mo (Old Doctor)", desc: "Wisdom, healing, good advice. 智慧、治愈、良言良计。", icon: "HeartPulse", color: "text-rose-400" },
-  { id: 4, name: "คนต้องขอคา", meaning: "Khon Tong Kho Ka (Prisoner)", desc: "Restrictions, legal issues, feeling trapped. 束缚、法律纠纷、感到困顿。", icon: "Link", color: "text-zinc-600" },
-  { id: 5, name: "เทวดาขี่เต่า", meaning: "Thevada Khi Tao (Angel on Turtle)", desc: "Slow progress but steady success. 慢速但稳定的进步、长寿。", icon: "ShieldQuestion", color: "text-amber-400" },
-  { id: 6, name: "ฉัตรทอง", meaning: "Chat Thong (Golden Umbrella)", desc: "Great success, fame, prosperity. 极大的成功、名誉、繁荣。", icon: "Crown", color: "text-gold" },
-  { id: 7, name: "ราหู", meaning: "Rahu", desc: "Obstacles, enemies, sudden changes. 障碍、敌人、突如其来的变化。", icon: "CloudLightning", color: "text-red-500" },
-  { id: 8, name: "ปราสาท", meaning: "Prasat (Palace)", desc: "High status, successful ventures. 高地位、成功的投资、显赫。", icon: "Trophy", color: "text-gold/80" },
-  { id: 9, name: "เรือนหลวง", meaning: "Ruean Luang (Royal House)", desc: "Family stability, properties, honor. 家庭稳定、地产、荣誉。", icon: "Home", color: "text-indigo-400" },
-  { id: 10, name: "คนคอขาด", meaning: "Khon Kho Khat (Beheaded person)", desc: "Danger, accidents, big risks. 危险、意外、巨大风险。", icon: "Skull", color: "text-red-700 font-bold" },
-  { id: 11, name: "ฉัตรเงิน", meaning: "Chat Ngoen (Silver Umbrella)", desc: "Status, success, good protection. 地位、成功、良好的庇护。", icon: "Shield", color: "text-zinc-300" },
+  { id: 0, name: "เจดีย์", meaning: "Chedi (Pagoda)", desc: "Peace, success in small things, merit. 成功、平静、功德。", icon: "Mountain", color: "text-emerald-400", image: "/assets/thai_houses/house_0.png" },
+  { id: 1, name: "นาคราช", meaning: "Nakkarat (Naga)", desc: "Power, influence, hidden wealth. 权利、影响力、意外之财。", icon: "Zap", color: "text-blue-400", image: "/assets/thai_houses/house_1.png" },
+  { id: 2, name: "แม่มด", meaning: "Mae Mod (Sorceress)", desc: "Mystery, charm, hidden dangers. 神秘、魅力、隐藏的危险。", icon: "Sparkles", color: "text-purple-400", image: "/assets/thai_houses/house_2.png" },
+  { id: 3, name: "พ่อหมอ", meaning: "Pho Mo (Old Doctor)", desc: "Wisdom, healing, good advice. 智慧、治愈、良言良计。", icon: "HeartPulse", color: "text-rose-400", image: "/assets/thai_houses/house_3.png" },
+  { id: 4, name: "คนต้องขอคา", meaning: "Khon Tong Kho Ka (Prisoner)", desc: "Restrictions, legal issues, feeling trapped. 束缚、法律纠纷、感到困顿。", icon: "Link", color: "text-zinc-600", image: "/assets/thai_houses/house_4.png" },
+  { id: 5, name: "เทวดาขี่เต่า", meaning: "Thevada Khi Tao (Angel on Turtle)", desc: "Slow progress but steady success. 慢速但稳定的进步、长寿。", icon: "ShieldQuestion", color: "text-amber-400", image: "/assets/thai_houses/house_5.png" },
+  { id: 6, name: "ฉัตรทอง", meaning: "Chat Thong (Golden Umbrella)", desc: "Great success, fame, prosperity. 极大的成功、名誉、繁荣。", icon: "Crown", color: "text-gold", image: "/assets/thai_houses/house_6.png" },
+  { id: 7, name: "ราหู", meaning: "Rahu", desc: "Obstacles, enemies, sudden changes. 障碍、敌人、突如其来的变化。", icon: "CloudLightning", color: "text-red-500", image: "/assets/thai_houses/house_7.png" },
+  { id: 8, name: "ปราสาท", meaning: "Prasat (Palace)", desc: "High status, successful ventures. 高地位、成功的投资、显赫。", icon: "Trophy", color: "text-gold/80", image: "/assets/thai_houses/house_8.png" },
+  { id: 9, name: "เรือนหลวง", meaning: "Ruean Luang (Royal House)", desc: "Family stability, properties, honor. 家庭稳定、地产、荣誉。", icon: "Home", color: "text-indigo-400", image: "/assets/thai_houses/house_9.png" },
+  { id: 10, name: "คนคอขาด", meaning: "Khon Kho Khat (Beheaded person)", desc: "Danger, accidents, big risks. 危险、意外、巨大风险。", icon: "Skull", color: "text-red-700 font-bold", image: "/assets/thai_houses/house_10.png" },
+  { id: 11, name: "ฉัตรเงิน", meaning: "Chat Ngoen (Silver Umbrella)", desc: "Status, success, good protection. 地位、成功、良好的庇护。", icon: "Shield", color: "text-zinc-300", image: "/assets/thai_houses/house_11.png" },
 ];
 
 const PLANET_MAP: Record<number, string> = {
@@ -325,14 +368,10 @@ function DestinyCard({ client, onReplace }: { client: SavedClient, onReplace: ()
             <LayoutGrid className="w-3 h-3" /> 十二命宫巡环 (Thai Houses)
           </span>
           <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl flex items-center gap-4">
-            <div className={cn("w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-lg")}>
-              {(() => {
-                const icons: Record<string, any> = {
-                  Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield
-                };
-                const IconComp = icons[thaiSymbol.icon] || Star;
-                return <IconComp className={cn("w-6 h-6", thaiSymbol.color)} />;
-              })()}
+            <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-gold/30 flex flex-col items-center justify-center shadow-lg shrink-0">
+              <span className="text-[8px] font-bold text-zinc-500 leading-none">第</span>
+              <span className="text-base font-black text-gold leading-none my-0.5">{thaiSymbol.id + 1}</span>
+              <span className="text-[8px] font-bold text-zinc-500 leading-none">宫</span>
             </div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
@@ -350,7 +389,7 @@ function DestinyCard({ client, onReplace }: { client: SavedClient, onReplace: ()
 
 // --- Main App ---
 export default function App() {
-  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'cases' | 'notes' | 'backup' | 'appointments' | 'settings'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'analyze' | 'cases' | 'notes' | 'backup' | 'appointments' | 'settings' | 'luopan'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [cases, setCases] = useState<CaseItem[]>([]);
@@ -413,7 +452,7 @@ export default function App() {
   const [selectedYueIndex, setSelectedYueIndex] = useState(() => {
     try {
       const now = Solar.fromDate(new Date());
-      const prevJie = now.getLunar().getPrevJie().getName();
+      const prevJie = now.getLunar().getPrevJie(true).getName();
       const names = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
       const idx = names.indexOf(prevJie);
       return idx >= 0 ? idx : 0;
@@ -425,7 +464,7 @@ export default function App() {
     try {
       const today = new Date();
       const nowSolar = Solar.fromDate(today);
-      const prevJie = nowSolar.getLunar().getPrevJie().getName();
+      const prevJie = nowSolar.getLunar().getPrevJie(true).getName();
       const names = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
       const yueIdx = names.indexOf(prevJie);
       const safeYue = yueIdx >= 0 ? yueIdx : 0;
@@ -451,6 +490,18 @@ export default function App() {
       return 0;
     }
   });
+
+  // Transits State (Astrology Tab)
+  const [isTransitsMode, setIsTransitsMode] = useState(false);
+  const [transitDate, setTransitDate] = useState(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
+  const [transitTime, setTransitTime] = useState('12:00');
+  const [selectedHouseIndex, setSelectedHouseIndex] = useState<number | null>(null);
 
   // Client info state
   const [clientName, setClientName] = useState('');
@@ -808,6 +859,17 @@ export default function App() {
     setEditingClientId(null);
     setCurrentAnalysisClientId(client.id);
     setNumerologyYear(new Date().getFullYear());
+    try {
+      const nowToday = new Date();
+      const nowSolar = Solar.fromDate(nowToday);
+      const prevJie = nowSolar.getLunar().getPrevJie(true).getName();
+      const sectionalNames = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
+      const yueIdx = sectionalNames.indexOf(prevJie);
+      setSelectedNianYear(nowToday.getFullYear());
+      setSelectedYueIndex(yueIdx >= 0 ? yueIdx : 0);
+    } catch (e) {
+      console.error(e);
+    }
 
     await new Promise(r => setTimeout(r, 280));
     setProfileProgress(100);
@@ -963,7 +1025,7 @@ export default function App() {
 
       return { 
         planets: planetsWithHouses, 
-        asc, ascSign: ZODIAC_SIGNS[ascSignIdx], ascDeg,
+        asc, ascSign: ZODIAC_SIGNS[ascSignIdx], ascDeg, ascSignIdx,
         mc, mcSign: ZODIAC_SIGNS[mcSignIdx], mcDeg,
         ic, icSign: ZODIAC_SIGNS[icSignIdx],
         dsc, dscSign: ZODIAC_SIGNS[dscSignIdx],
@@ -1011,6 +1073,23 @@ export default function App() {
     }
     return results;
   }, [westernData]);
+
+  // Transits Planetary Positions
+  const transitPlanets = useMemo<TransitPlanet[]>(() => {
+    if (!westernData) return [];
+    return calculateTransitPlanets(transitDate, transitTime, timezone, westernData.ascSignIdx);
+  }, [transitDate, transitTime, timezone, westernData]);
+
+  // Transits to Natal Aspects
+  const transitAspects = useMemo<TransitAspect[]>(() => {
+    if (!westernData || transitPlanets.length === 0) return [];
+    const natalPoints = [
+      ...westernData.planets.map(p => ({ id: p.id, name: p.name, symbol: p.symbol, longitude: p.longitude })),
+      { id: 'ASC', name: '上升(ASC)', symbol: 'ASC', longitude: westernData.asc },
+      { id: 'MC', name: '中天(MC)', symbol: 'MC', longitude: westernData.mc },
+    ];
+    return calculateTransitToNatalAspects(transitPlanets, natalPoints);
+  }, [westernData, transitPlanets]);
 
   // --- Core Data Calculation ---
   const data = useMemo<BaziData | null>(() => {
@@ -1188,8 +1267,8 @@ export default function App() {
       setSelectedDaYunIndex(targetDaYunIdx);
       setSelectedNianYear(currentYear);
 
-      // 2. Locate current Bazi month index (0 to 11 based on 24 solar terms)
-      const prevJie = nowSolar.getLunar().getPrevJie().getName();
+      // 2. Locate current Bazi month index (0 to 11 based on 24 solar terms, with wholeDay = true for term day)
+      const prevJie = nowSolar.getLunar().getPrevJie(true).getName();
       const sectionalNames = ['立春', '惊蛰', '清明', '立夏', '芒种', '小暑', '立秋', '白露', '寒露', '立冬', '大雪', '小寒'];
       const yueIdx = sectionalNames.indexOf(prevJie);
       const targetYueIdx = yueIdx >= 0 ? yueIdx : 0;
@@ -1351,6 +1430,22 @@ export default function App() {
                         {savedClients.length}
                       </span>
                     )}
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setView('luopan');
+                      setIsSideMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex items-center justify-between p-3.5 rounded-xl transition-all font-bold text-sm min-h-[46px] cursor-pointer",
+                      view === 'luopan' ? "bg-gold text-zinc-950 shadow-md" : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Compass className="w-5 h-5" />
+                      <span>{lang === 'zh' ? '罗盘' : 'Luopan'}</span>
+                    </div>
                   </button>
 
                   <button 
@@ -1601,7 +1696,7 @@ export default function App() {
               const nowEightChar = nowLunar.getEightChar();
               const currentBazi = [
                 { label: '流年', bazi: nowEightChar.getYear() },
-                { label: '流月', bazi: nowEightChar.getMonth() },
+                { label: '流月', bazi: getRealtimeLiuYue(new Date()) },
                 { label: '流日', bazi: nowEightChar.getDay() }
               ];
 
@@ -2282,24 +2377,87 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Extra Rows: 星运, 自坐, 空亡 */}
+                  {/* Extra Rows: 星运, 自坐, 空亡, 神煞 */}
                   {[
                     { label: "星运", items: [eightChar.getTimeDiShi(), eightChar.getDayDiShi(), eightChar.getMonthDiShi(), eightChar.getYearDiShi(), "胎", "死"] },
                     { label: "自坐", items: [eightChar.getTimeNaYin(), eightChar.getDayNaYin(), eightChar.getMonthNaYin(), eightChar.getYearNaYin(), "海中金", "剑锋金"] },
                     { label: "空亡", items: [eightChar.getTimeXunKong(), eightChar.getDayXunKong(), eightChar.getMonthXunKong(), eightChar.getYearXunKong(), "申酉", "寅卯"] },
                   ].map((row, rowIdx) => (
-                    <div key={rowIdx} className={cn("flex border-b border-zinc-800 bg-zinc-900/30", rowIdx === 2 && "border-b-0")}>
-                      <div className="w-12 sm:w-16 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">{row.label}</div>
+                    <div key={rowIdx} className="flex border-b border-zinc-800 bg-zinc-900/30">
+                      <div className="w-12 sm:w-16 shrink-0 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">{row.label}</div>
                       {row.items.map((val, colIdx) => {
                         if (colIdx >= 6) return null;
                         return (
-                          <div key={colIdx} className="flex-1 flex items-center justify-center py-1 sm:py-2 px-1 text-[10px] sm:text-[11px] text-zinc-400 border-r border-zinc-800 last:border-r-0 text-center">
+                          <div key={colIdx} className="flex-1 min-w-0 w-0 flex items-center justify-center py-1 sm:py-2 px-1 text-[10px] sm:text-[11px] text-zinc-400 border-r border-zinc-800 last:border-r-0 text-center">
                             {val}
                           </div>
                         );
                       })}
                     </div>
                   ))}
+
+                  {/* 神煞 Row - Directly underneath 空亡 with all symbolic stars */}
+                  {(() => {
+                    const baziCtx: BaziPillarsContext = {
+                      year: { gan: eightChar.getYearGan(), zhi: eightChar.getYearZhi() },
+                      month: { gan: eightChar.getMonthGan(), zhi: eightChar.getMonthZhi() },
+                      day: { gan: eightChar.getDayGan(), zhi: eightChar.getDayZhi() },
+                      hour: { 
+                        gan: (eightChar as any).getHour ? (eightChar as any).getHour().substring(0, 1) : eightChar.getTime().substring(0, 1), 
+                        zhi: (eightChar as any).getHour ? (eightChar as any).getHour().substring(1, 2) : eightChar.getTime().substring(1, 2)
+                      },
+                      gender
+                    };
+
+                    const hourShenSha = calculatePillarShenSha(baziCtx.hour, 'hour', baziCtx);
+                    const dayShenSha = calculatePillarShenSha(baziCtx.day, 'day', baziCtx);
+                    const monthShenSha = calculatePillarShenSha(baziCtx.month, 'month', baziCtx);
+                    const yearShenSha = calculatePillarShenSha(baziCtx.year, 'year', baziCtx);
+                    const daYunShenSha = calculatePillarShenSha({ gan: daYunGan, zhi: daYunZhi }, 'dayun', baziCtx);
+                    const liuNianShenSha = calculatePillarShenSha({ 
+                        gan: currentLiuNian.getGanZhi().substring(0, 1), 
+                        zhi: currentLiuNian.getGanZhi().substring(1, 2) 
+                    }, 'liunian', baziCtx);
+
+                    const pillarShenShaList = [hourShenSha, dayShenSha, monthShenSha, yearShenSha, daYunShenSha, liuNianShenSha];
+
+                    return (
+                      <div className="flex border-b border-zinc-800 bg-zinc-900/30">
+                        <div className="w-12 sm:w-16 shrink-0 flex items-center justify-center text-xs font-bold bg-zinc-900 border-r border-zinc-800">
+                          神煞
+                        </div>
+                        {pillarShenShaList.map((shenShaList, colIdx) => (
+                          <div key={colIdx} className="flex-1 min-w-0 w-0 flex flex-col items-center justify-start py-2 px-0.5 sm:px-1 border-r border-zinc-800 last:border-r-0 text-center overflow-hidden">
+                            {shenShaList.length > 0 ? (
+                              <div className="w-full flex flex-col items-center gap-1">
+                                {shenShaList.map((ss, i) => {
+                                  const len = ss.name.length;
+                                  return (
+                                    <span
+                                      key={i}
+                                      title={ss.desc}
+                                      className={cn(
+                                        "block w-full whitespace-nowrap font-bold text-amber-300 hover:text-gold transition-colors cursor-help",
+                                        len >= 4 
+                                          ? "text-[8.5px] sm:text-[9.5px] tracking-tighter leading-tight" 
+                                          : len === 3 
+                                            ? "text-[9.5px] sm:text-[10.5px] tracking-tight leading-tight" 
+                                            : "text-[11px] sm:text-xs leading-tight"
+                                      )}
+                                    >
+                                      {ss.name}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-zinc-600">-</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 五行能量与胎元命宫身宫 */}
@@ -2950,7 +3108,7 @@ export default function App() {
               <div className="flex flex-col gap-4">
                 {westernData && (
                   <>
-                    {/* Visual Chart */}
+                    {/* Visual Chart (Dual-Wheel when Transits Mode Active) */}
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex flex-col items-center justify-center shadow-2xl relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-full h-full opacity-[0.03] pointer-events-none">
                         <svg className="w-full h-full" viewBox="0 0 100 100">
@@ -2961,7 +3119,7 @@ export default function App() {
 
                       <div className="relative w-72 h-72 sm:w-96 sm:h-96">
                          {/* Circle Background */}
-                         <svg viewBox="0 0 400 400" className="w-full h-full overflow-visible">
+                         <svg viewBox={isTransitsMode ? "-45 -45 490 490" : "0 0 400 400"} className="w-full h-full overflow-visible">
                             <defs>
                                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                                   <feGaussianBlur stdDeviation="3" result="blur" />
@@ -2984,6 +3142,46 @@ export default function App() {
                                      <circle cx="200" cy="200" r="125" className="stroke-zinc-800 fill-black/40" strokeWidth="1" />
                                      {/* Central Circle */}
                                      <circle cx="200" cy="200" r="35" className="stroke-zinc-800 fill-zinc-950/80" strokeWidth="1" />
+
+                                     {/* TRANSIT OUTER RING & PLANETS */}
+                                     {isTransitsMode && (
+                                       <>
+                                         <circle cx="200" cy="200" r="236" className="stroke-cyan-500/40 fill-cyan-950/20" strokeWidth="1.2" strokeDasharray="3 3" />
+                                         <circle cx="200" cy="200" r="202" className="stroke-cyan-500/70 fill-none" strokeWidth="1" />
+                                         {transitPlanets.map((tp, i) => {
+                                           const tAngle = (tp.longitude - offset) * Math.PI / 180;
+                                           const tx = 200 + 220 * Math.cos(tAngle);
+                                           const ty = 200 + 220 * Math.sin(tAngle);
+                                           const tick1X = 200 + 202 * Math.cos(tAngle);
+                                           const tick1Y = 200 + 202 * Math.sin(tAngle);
+                                           const tick2X = 200 + 208 * Math.cos(tAngle);
+                                           const tick2Y = 200 + 208 * Math.sin(tAngle);
+
+                                           return (
+                                             <g key={i}>
+                                               <line x1={tick1X} y1={tick1Y} x2={tick2X} y2={tick2Y} className="stroke-cyan-400" strokeWidth="1.5" />
+                                               <circle cx={tx} cy={ty} r="10" className="fill-zinc-950 stroke-cyan-400" strokeWidth="1.2" />
+                                               <text 
+                                                 x={tx} y={ty} 
+                                                 className="fill-cyan-300 font-serif text-[11px] font-bold" 
+                                                 textAnchor="middle" dominantBaseline="middle"
+                                               >
+                                                 {tp.symbol}
+                                               </text>
+                                               {tp.isRetrograde && (
+                                                 <text 
+                                                   x={tx + 7} y={ty - 6} 
+                                                   className="fill-rose-400 text-[8px] font-black" 
+                                                   textAnchor="start"
+                                                 >
+                                                   R
+                                                 </text>
+                                               )}
+                                             </g>
+                                           );
+                                         })}
+                                       </>
+                                     )}
 
                                      {/* 2. ZODIAC SIGNS RING (160-200) */}
                                      {ZODIAC_SIGNS.map((sign, i) => {
@@ -3069,28 +3267,53 @@ export default function App() {
                                      })}
 
                                      {/* 4. ASPECT LINES (Inner Area < 125) */}
-                                     {aspects.map((asp, idx) => {
-                                        const r = 125;
-                                        const x1 = 200 + r * Math.cos((asp.p1.longitude - offset) * Math.PI / 180);
-                                        const y1 = 200 + r * Math.sin((asp.p1.longitude - offset) * Math.PI / 180);
-                                        const x2 = 200 + r * Math.cos((asp.p2.longitude - offset) * Math.PI / 180);
-                                        const y2 = 200 + r * Math.sin((asp.p2.longitude - offset) * Math.PI / 180);
-                                        
-                                        const isHard = asp.aspect.angle === 90 || asp.aspect.angle === 180;
-                                        const strokeClass = asp.aspect.color.replace('text-', 'stroke-');
-                                        
-                                        return (
+                                     {isTransitsMode ? (
+                                       // Active Transit-to-Natal Aspects Lines
+                                       transitAspects.slice(0, 16).map((asp, idx) => {
+                                         const r = 125;
+                                         const x1 = 200 + r * Math.cos((asp.transitPlanet.longitude - offset) * Math.PI / 180);
+                                         const y1 = 200 + r * Math.sin((asp.transitPlanet.longitude - offset) * Math.PI / 180);
+                                         const x2 = 200 + r * Math.cos((asp.natalPlanet.longitude - offset) * Math.PI / 180);
+                                         const y2 = 200 + r * Math.sin((asp.natalPlanet.longitude - offset) * Math.PI / 180);
+                                         
+                                         const isChallenging = asp.aspect.nature === 'challenging';
+                                         const strokeClass = asp.aspect.color.replace('text-', 'stroke-');
+                                         
+                                         return (
                                            <line 
-                                              key={idx}
-                                              x1={x1} y1={y1} x2={x2} y2={y2}
-                                              className={cn(isHard ? "opacity-70" : "opacity-40", strokeClass)} 
-                                              strokeWidth={isHard ? "2" : "1.2"}
-                                              strokeDasharray={asp.aspect.angle === 90 ? "4 2" : "none"}
+                                             key={idx}
+                                             x1={x1} y1={y1} x2={x2} y2={y2}
+                                             className={cn(isChallenging ? "opacity-80" : "opacity-60", strokeClass)} 
+                                             strokeWidth={isChallenging ? "1.8" : "1.2"}
+                                             strokeDasharray={isChallenging ? "4 2" : "none"}
                                            />
-                                        );
-                                     })}
+                                         );
+                                       })
+                                     ) : (
+                                       // Natal Aspects Lines
+                                       aspects.map((asp, idx) => {
+                                         const r = 125;
+                                         const x1 = 200 + r * Math.cos((asp.p1.longitude - offset) * Math.PI / 180);
+                                         const y1 = 200 + r * Math.sin((asp.p1.longitude - offset) * Math.PI / 180);
+                                         const x2 = 200 + r * Math.cos((asp.p2.longitude - offset) * Math.PI / 180);
+                                         const y2 = 200 + r * Math.sin((asp.p2.longitude - offset) * Math.PI / 180);
+                                         
+                                         const isHard = asp.aspect.angle === 90 || asp.aspect.angle === 180;
+                                         const strokeClass = asp.aspect.color.replace('text-', 'stroke-');
+                                         
+                                         return (
+                                            <line 
+                                               key={idx}
+                                               x1={x1} y1={y1} x2={x2} y2={y2}
+                                               className={cn(isHard ? "opacity-70" : "opacity-40", strokeClass)} 
+                                               strokeWidth={isHard ? "2" : "1.2"}
+                                               strokeDasharray={asp.aspect.angle === 90 ? "4 2" : "none"}
+                                            />
+                                         );
+                                       })
+                                     )}
 
-                                     {/* 5. PLANETS (Area 130) */}
+                                     {/* 5. NATAL PLANETS (Area 130) */}
                                       {(() => {
                                          const positionedPlanets = [...westernData.planets].sort((a, b) => a.longitude - b.longitude);
                                          const labels: { x: number, y: number, symbol: string, id: string, angle: number, isRetrograde: boolean }[] = [];
@@ -3195,6 +3418,7 @@ export default function App() {
                          </svg>
                       </div>
 
+                      {/* 4 Angles: ASC, MC, DSC, IC */}
                       <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold w-full px-2">
                          <div className="flex flex-col items-center p-2 bg-emerald-950/20 border border-emerald-900/40 rounded-lg text-emerald-400">
                             <div className="flex items-center gap-1.5 mb-1">
@@ -3225,83 +3449,250 @@ export default function App() {
                             <span className="text-zinc-100 font-bold">{westernData.icSign.name}</span>
                          </div>
                       </div>
+
+                      {/* Transit 行运盘 Button & Controls (Placed below the chart, center aligned) */}
+                      <div className="mt-3 pt-3 border-t border-zinc-800/80 w-full flex flex-col items-center justify-center gap-2.5 px-1">
+                        <div className="flex justify-center w-full">
+                          <button
+                            type="button"
+                            onClick={() => setIsTransitsMode(!isTransitsMode)}
+                            className={cn(
+                              "px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm mx-auto",
+                              isTransitsMode
+                                ? "bg-cyan-500 text-zinc-950 font-black shadow-cyan-500/20"
+                                : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 hover:border-zinc-500"
+                            )}
+                          >
+                            <Orbit className="w-3.5 h-3.5" />
+                            <span>Transit 行运盘</span>
+                          </button>
+                        </div>
+
+                        {isTransitsMode && (
+                          <div className="flex flex-nowrap items-center justify-center gap-1 sm:gap-1.5 text-xs w-full overflow-x-auto py-0.5">
+                            <input
+                              type="date"
+                              value={transitDate}
+                              onChange={e => setTransitDate(e.target.value)}
+                              className="w-[110px] sm:w-[124px] px-1.5 py-1 bg-black/70 border border-zinc-700 rounded text-[11px] sm:text-xs text-white font-mono focus:outline-none focus:border-cyan-400 shrink-0"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date(transitDate);
+                                d.setMonth(d.getMonth() - 1);
+                                setTransitDate(d.toISOString().split('T')[0]);
+                              }}
+                              className="px-1.5 sm:px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold border border-zinc-700 whitespace-nowrap shrink-0 cursor-pointer"
+                            >
+                              -1月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const today = new Date();
+                                const y = today.getFullYear();
+                                const m = String(today.getMonth() + 1).padStart(2, '0');
+                                const d = String(today.getDate()).padStart(2, '0');
+                                setTransitDate(`${y}-${m}-${d}`);
+                              }}
+                              className="px-1.5 sm:px-2 py-1 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 text-[11px] font-bold border border-cyan-700 whitespace-nowrap shrink-0 cursor-pointer"
+                            >
+                              今日
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date(transitDate);
+                                d.setMonth(d.getMonth() + 1);
+                                setTransitDate(d.toISOString().split('T')[0]);
+                              }}
+                              className="px-1.5 sm:px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold border border-zinc-700 whitespace-nowrap shrink-0 cursor-pointer"
+                            >
+                              +1月
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const d = new Date(transitDate);
+                                d.setFullYear(d.getFullYear() + 1);
+                                setTransitDate(d.toISOString().split('T')[0]);
+                              }}
+                              className="px-1.5 sm:px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-bold border border-zinc-700 whitespace-nowrap shrink-0 cursor-pointer"
+                            >
+                              +1年
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Aspects Section */}
-                    {aspects.length > 0 && (
-                      <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
-                         <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
-                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">相位分析 (Aspects)</span>
-                            <span className="text-[9px] font-bold text-zinc-500">共 {aspects.length} 个主要相位</span>
-                         </div>
-                         <div className="p-2.5 grid grid-cols-2 gap-1.5 sm:gap-2 max-h-72 overflow-y-auto custom-scrollbar">
-                            {aspects.map((asp, idx) => (
-                               <div key={idx} className="bg-black/40 border border-zinc-800/60 px-2 py-1.5 rounded-lg flex flex-col gap-0.5 hover:border-zinc-700 transition-colors">
+                    {/* TRANSITS ANALYSIS SECTIONS (When Transits Mode is Active) */}
+                    {isTransitsMode ? (
+                      <>
+                        {/* Section A: Transiting Planets in Natal Houses Table */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+                          <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
+                            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">
+                              流年行星位置 (Transits)
+                            </span>
+                            <span className="text-[9px] font-bold text-zinc-400 font-mono">
+                              {transitDate}
+                            </span>
+                          </div>
+                          <div className="w-full">
+                            <table className="w-full border-collapse text-left table-fixed">
+                              <thead>
+                                <tr className="bg-zinc-950/60 text-[10px] sm:text-[11px] text-zinc-400 font-bold border-b border-zinc-800">
+                                  <th className="py-2 px-1.5 sm:px-3 text-left w-[34%]">行星</th>
+                                  <th className="py-2 px-1 sm:px-2 text-left w-[26%]">星座</th>
+                                  <th className="py-2 px-1 sm:px-2 text-left w-[22%]">度数</th>
+                                  <th className="py-2 px-1 sm:px-2 text-center w-[18%]">落宫</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {transitPlanets.map((tp, idx) => (
+                                  <tr key={idx} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                                    <td className="py-1.5 px-1.5 sm:px-3">
+                                      <div className="flex items-center gap-1 sm:gap-1.5">
+                                        <span className="text-base sm:text-lg text-cyan-400 shrink-0 select-none font-serif">{tp.symbol}</span>
+                                        <span className="text-xs sm:text-sm font-bold text-white truncate">{tp.name}</span>
+                                        {tp.isRetrograde && (
+                                          <span className="text-[8px] sm:text-[9px] px-1 py-0.2 rounded bg-rose-950/80 text-rose-300 border border-rose-800/80 font-bold tracking-tight shrink-0">
+                                            逆
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-1.5 px-1 sm:px-2">
+                                      <span className="text-[11px] sm:text-xs font-bold text-zinc-200 truncate">{tp.signName}</span>
+                                    </td>
+                                    <td className="py-1.5 px-1 sm:px-2 text-[10px] sm:text-xs font-mono font-medium text-amber-200/90 whitespace-nowrap">
+                                      {Math.floor(tp.degree)}°
+                                    </td>
+                                    <td className="py-1.5 px-1 sm:px-2 text-center">
+                                      <span className="inline-flex items-center justify-center px-1.5 py-0.5 min-w-[22px] h-5 rounded bg-zinc-800/90 border border-cyan-500/40 text-[10px] sm:text-xs font-bold text-cyan-300">
+                                        {tp.natalHouse}宫
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Section B: Transit-to-Natal Active Aspects Analysis */}
+                        {transitAspects.length > 0 && (
+                          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+                            <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
+                              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">
+                                流年关键相位 (Transit Aspects)
+                              </span>
+                              <span className="text-[9px] font-bold text-zinc-500">
+                                共 {transitAspects.length} 个主要相位
+                              </span>
+                            </div>
+                            <div className="p-2.5 grid grid-cols-2 gap-1.5 sm:gap-2 max-h-72 overflow-y-auto custom-scrollbar">
+                              {transitAspects.map((asp, idx) => (
+                                <div 
+                                  key={idx} 
+                                  className="bg-black/40 border border-zinc-800/60 px-2 py-1.5 rounded-lg flex flex-col gap-0.5 hover:border-zinc-700 transition-colors"
+                                >
                                   <div className="flex items-center justify-between">
-                                     <span className="text-[11px] font-bold text-zinc-200 truncate">{asp.p1.symbol} {asp.p1.name}</span>
-                                     <span className={cn("text-xs font-black mx-1 shrink-0", asp.aspect.color)}>{asp.aspect.symbol}</span>
-                                     <span className="text-[11px] font-bold text-zinc-200 truncate">{asp.p2.name} {asp.p2.symbol}</span>
+                                    <span className="text-[11px] font-bold text-cyan-300 truncate">T.{asp.transitPlanet.name}</span>
+                                    <span className={cn("text-xs font-black mx-1 shrink-0", asp.aspect.color)}>{asp.aspect.symbol}</span>
+                                    <span className="text-[11px] font-bold text-gold truncate">N.{asp.natalPlanet.name}</span>
                                   </div>
                                   <div className="flex justify-between items-center text-[9px] text-zinc-400 pt-0.5">
                                     <span className="font-medium text-zinc-300">{asp.aspect.name}</span>
-                                    <span className="font-mono text-zinc-500">容 {Math.abs(asp.diff - asp.aspect.angle).toFixed(1)}°</span>
+                                    <span className="font-mono text-zinc-500">容 {asp.orb}°</span>
                                   </div>
-                               </div>
-                            ))}
-                         </div>
-                      </div>
-                    )}
-
-                    {/* Planets Table */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
-                       <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">行星位置 (Planet Positions)</span>
-                          <span className="text-[9px] font-bold text-zinc-500">共 {westernData.planets.length} 颗星体</span>
-                       </div>
-                       <div className="w-full">
-                          <table className="w-full border-collapse text-left table-fixed">
-                             <thead>
-                                <tr className="bg-zinc-950/60 text-[10px] sm:text-[11px] text-zinc-400 font-bold border-b border-zinc-800">
-                                   <th className="py-2 px-1.5 sm:px-3 text-left w-[34%]">行星</th>
-                                   <th className="py-2 px-1 sm:px-2 text-left w-[26%]">星座</th>
-                                   <th className="py-2 px-1 sm:px-2 text-left w-[22%]">度数</th>
-                                   <th className="py-2 px-1 sm:px-2 text-center w-[18%]">宫位</th>
-                                </tr>
-                             </thead>
-                             <tbody>
-                                {westernData.planets.map((p, i) => (
-                                   <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
-                                      <td className="py-1.5 px-1.5 sm:px-3">
-                                         <div className="flex items-center gap-1 sm:gap-1.5">
-                                            <span className="text-base sm:text-lg text-gold shrink-0 select-none">{p.symbol}</span>
-                                            <span className="text-xs sm:text-sm font-bold text-white truncate">{p.name}</span>
-                                            {p.isRetrograde && (
-                                               <span className="text-[8px] sm:text-[9px] px-1 py-0.2 rounded bg-rose-950/80 text-rose-300 border border-rose-800/80 font-bold tracking-tight shrink-0">
-                                                  逆
-                                               </span>
-                                            )}
-                                         </div>
-                                      </td>
-                                      <td className="py-1.5 px-1 sm:px-2">
-                                         <div className="flex items-baseline gap-1 truncate">
-                                            <span className="text-[11px] sm:text-xs font-bold text-zinc-200">{p.sign.name}</span>
-                                            <span className="hidden min-[400px]:inline text-[9px] text-zinc-500 font-sans">({p.sign.eng})</span>
-                                         </div>
-                                      </td>
-                                      <td className="py-1.5 px-1 sm:px-2 text-[10px] sm:text-xs font-mono font-medium text-amber-200/90 whitespace-nowrap">
-                                         {Math.floor(p.degree)}°{String(Math.floor((p.degree % 1) * 60)).padStart(2, '0')}'
-                                      </td>
-                                      <td className="py-1.5 px-1 sm:px-2 text-center">
-                                         <span className="inline-flex items-center justify-center px-1.5 py-0.5 min-w-[22px] h-5 rounded bg-zinc-800/90 border border-gold/30 text-[10px] sm:text-xs font-bold text-gold">
-                                            {p.house}宫
-                                         </span>
-                                      </td>
-                                   </tr>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {/* Aspects Section (Standard Natal Chart) */}
+                        {aspects.length > 0 && (
+                          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+                             <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">本命相位分析 (Natal Aspects)</span>
+                                <span className="text-[9px] font-bold text-zinc-500">共 {aspects.length} 个主要相位</span>
+                             </div>
+                             <div className="p-2.5 grid grid-cols-2 gap-1.5 sm:gap-2 max-h-72 overflow-y-auto custom-scrollbar">
+                                {aspects.map((asp, idx) => (
+                                   <div key={idx} className="bg-black/40 border border-zinc-800/60 px-2 py-1.5 rounded-lg flex flex-col gap-0.5 hover:border-zinc-700 transition-colors">
+                                      <div className="flex items-center justify-between">
+                                         <span className="text-[11px] font-bold text-zinc-200 truncate">{asp.p1.symbol} {asp.p1.name}</span>
+                                         <span className={cn("text-xs font-black mx-1 shrink-0", asp.aspect.color)}>{asp.aspect.symbol}</span>
+                                         <span className="text-[11px] font-bold text-zinc-200 truncate">{asp.p2.name} {asp.p2.symbol}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center text-[9px] text-zinc-400 pt-0.5">
+                                        <span className="font-medium text-zinc-300">{asp.aspect.name}</span>
+                                        <span className="font-mono text-zinc-500">容 {Math.abs(asp.diff - asp.aspect.angle).toFixed(1)}°</span>
+                                      </div>
+                                   </div>
                                 ))}
-                             </tbody>
-                          </table>
-                       </div>
-                    </div>
+                             </div>
+                          </div>
+                        )}
+
+                        {/* Planets Table (Standard Natal Chart) */}
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
+                           <div className="bg-zinc-800/90 px-3.5 py-2 border-b border-zinc-700/80 flex items-center justify-between">
+                              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">本命行星位置 (Planet Positions)</span>
+                              <span className="text-[9px] font-bold text-zinc-500">共 {westernData.planets.length} 颗星体</span>
+                           </div>
+                           <div className="w-full">
+                              <table className="w-full border-collapse text-left table-fixed">
+                                 <thead>
+                                    <tr className="bg-zinc-950/60 text-[10px] sm:text-[11px] text-zinc-400 font-bold border-b border-zinc-800">
+                                       <th className="py-2 px-1.5 sm:px-3 text-left w-[34%]">行星</th>
+                                       <th className="py-2 px-1 sm:px-2 text-left w-[26%]">星座</th>
+                                       <th className="py-2 px-1 sm:px-2 text-left w-[22%]">度数</th>
+                                       <th className="py-2 px-1 sm:px-2 text-center w-[18%]">宫位</th>
+                                    </tr>
+                                 </thead>
+                                 <tbody>
+                                    {westernData.planets.map((p, i) => (
+                                       <tr key={i} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
+                                          <td className="py-1.5 px-1.5 sm:px-3">
+                                             <div className="flex items-center gap-1 sm:gap-1.5">
+                                                <span className="text-base sm:text-lg text-gold shrink-0 select-none">{p.symbol}</span>
+                                                <span className="text-xs sm:text-sm font-bold text-white truncate">{p.name}</span>
+                                                {p.isRetrograde && (
+                                                   <span className="text-[8px] sm:text-[9px] px-1 py-0.2 rounded bg-rose-950/80 text-rose-300 border border-rose-800/80 font-bold tracking-tight shrink-0">
+                                                      逆
+                                                   </span>
+                                                )}
+                                             </div>
+                                          </td>
+                                          <td className="py-1.5 px-1 sm:px-2">
+                                             <div className="flex items-baseline gap-1 truncate">
+                                                <span className="text-[11px] sm:text-xs font-bold text-zinc-200">{p.sign.name}</span>
+                                                <span className="hidden min-[400px]:inline text-[9px] text-zinc-500 font-sans">({p.sign.eng})</span>
+                                             </div>
+                                          </td>
+                                          <td className="py-1.5 px-1 sm:px-2 text-[10px] sm:text-xs font-mono font-medium text-amber-200/90 whitespace-nowrap">
+                                             {Math.floor(p.degree)}°{String(Math.floor((p.degree % 1) * 60)).padStart(2, '0')}'
+                                          </td>
+                                          <td className="py-1.5 px-1 sm:px-2 text-center">
+                                             <span className="inline-flex items-center justify-center px-1.5 py-0.5 min-w-[22px] h-5 rounded bg-zinc-800/90 border border-gold/30 text-[10px] sm:text-xs font-bold text-gold">
+                                                {p.house}宫
+                                             </span>
+                                          </td>
+                                       </tr>
+                                    ))}
+                                 </tbody>
+                              </table>
+                           </div>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -3309,8 +3700,6 @@ export default function App() {
               <div className="flex flex-col gap-4">
                 {(() => {
                    const age = getYearAge(birthDate);
-                   // Thai astrology often considers the current year as age + 1 (Year of Life)
-                   // But since user wants consistency, we will use the same age value for count.
                    const count = age === 0 ? 1 : age; 
                    
                    let targetIndex = 0;
@@ -3320,104 +3709,146 @@ export default function App() {
                       targetIndex = (count - 1) % 12;
                    }
                    
-                   const activeIcon = THAI_DESTINY_SYMBOLS[targetIndex];
+                   const displayIndex = selectedHouseIndex !== null ? selectedHouseIndex : targetIndex;
+                   const activeIcon = THAI_DESTINY_SYMBOLS[displayIndex];
                    
                    return (
                      <>
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-2xl flex flex-col items-center gap-6 relative overflow-hidden">
-                           <div className="absolute top-0 left-0 w-full h-full opacity-[0.02] pointer-events-none">
-                              <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
-                                 <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                                 <line x1="50" y1="10" x2="50" y2="90" stroke="currentColor" strokeWidth="0.5" />
-                                 <line x1="10" y1="50" x2="90" y2="50" stroke="currentColor" strokeWidth="0.5" />
-                              </svg>
-                           </div>
-
-                           <div className="relative z-10 flex flex-col items-center">
-                              <h3 className="text-sm font-black text-white uppercase tracking-widest mb-1">泰式命宫巡环</h3>
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 sm:p-5 shadow-2xl flex flex-col items-center gap-3 relative overflow-hidden">
+                           <div className="relative z-10 flex flex-col items-center text-center">
+                              <h3 className="text-sm font-black text-white uppercase tracking-widest mb-0.5">泰式命宫巡环</h3>
                               <p className="text-xs text-zinc-500 font-bold">性别: {gender === 1 ? "男 (乾)" : "女 (坤)"} | 当前岁数: <span className="text-gold">{age}</span> 岁</p>
                            </div>
 
-                           {/* The Wheel */}
-                           <div className="relative w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center">
-                              <div className="absolute inset-0 border-2 border-zinc-800/50 rounded-full" />
-                              <div className="absolute inset-4 border border-zinc-700/30 rounded-full" />
-                              
-                              {/* Central Indicator */}
-                              <div className="z-20 w-32 h-32 rounded-full bg-zinc-950 border-4 border-gold/30 flex flex-col items-center justify-center text-center p-4 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
-                                 {(() => {
-                                    const icons: Record<string, any> = {
-                                      Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield
-                                    };
-                                    const IconComp = icons[activeIcon.icon] || Star;
-                                    return <IconComp className={cn("w-10 h-10 mb-2", activeIcon.color)} />;
-                                 })()}
-                                 <span className="text-xs font-black text-white">{activeIcon.name}</span>
-                                 <span className="text-[9px] font-bold text-gold/80">{activeIcon.meaning}</span>
+                           {/* Interactive Radial Radar Wheel with Authentic Cropped Artwork Icons */}
+                           <div className="relative w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 flex items-center justify-center mx-auto my-1 select-none">
+                              {/* Background Astrological Guide Rings & Crosshairs */}
+                              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 360 360">
+                                 <circle cx="180" cy="180" r="170" fill="none" stroke="#27272a" strokeWidth="1" strokeDasharray="3 3" opacity="0.35" />
+                                 <circle cx="180" cy="180" r="135" fill="none" stroke="#27272a" strokeWidth="1.5" opacity="0.6" />
+                                 <circle cx="180" cy="180" r="95" fill="none" stroke="#27272a" strokeWidth="1" opacity="0.35" />
+                                 <line x1="180" y1="20" x2="180" y2="340" stroke="#27272a" strokeWidth="1" opacity="0.4" />
+                                 <line x1="20" y1="180" x2="340" y2="180" stroke="#27272a" strokeWidth="1" opacity="0.4" />
+                                 <line x1="67" y1="67" x2="293" y2="293" stroke="#27272a" strokeWidth="0.75" opacity="0.25" />
+                                 <line x1="67" y1="293" x2="293" y2="67" stroke="#27272a" strokeWidth="0.75" opacity="0.25" />
+                              </svg>
+
+                              {/* Center Focus Disk */}
+                              <div 
+                                className="absolute z-30 rounded-full border-2 border-gold/70 bg-zinc-950/95 shadow-[0_0_35px_rgba(212,175,55,0.3)] flex flex-col items-center justify-center p-2 text-center w-32 h-32 sm:w-36 sm:h-36 md:w-44 md:h-44"
+                                style={{
+                                  left: '50%',
+                                  top: '50%',
+                                  transform: 'translate(-50%, -50%)'
+                                }}
+                              >
+                                 <img 
+                                   src={activeIcon.image} 
+                                   alt={activeIcon.name} 
+                                   className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 object-contain drop-shadow-[0_0_12px_rgba(212,175,55,0.4)]"
+                                 />
+                                 <span className="text-sm sm:text-base md:text-lg font-black text-white leading-tight mt-1.5 truncate max-w-full">
+                                   {activeIcon.name}
+                                 </span>
+                                 <span className="text-[9px] sm:text-[10px] md:text-xs font-bold text-gold leading-tight mt-0.5 px-1 truncate max-w-full">
+                                   {activeIcon.meaning}
+                                 </span>
                               </div>
 
-                              {/* Decorative Clock in center background */}
-                              <div className="absolute inset-0 opacity-10 pointer-events-none p-8">
-                                 <svg viewBox="0 0 100 100" className="w-full h-full rotate-90">
-                                    <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="0.5" />
-                                    {[...Array(12)].map((_, i) => (
-                                       <line key={i} x1="50" y1="2" x2="50" y2="8" transform={`rotate(${i * 30} 50 50)`} stroke="currentColor" strokeWidth="1" />
-                                    ))}
-                                 </svg>
-                              </div>
-
-                              {/* Symbols around the wheel */}
-                              {THAI_DESTINY_SYMBOLS.map((sym, i) => {
-                                 const angle = 90 + i * 30; // Start 6 o'clock (Chedi)
-                                 const rad = 42; // Corrected radius for % positioning
-                                 const x = 50 + rad * Math.cos(angle * Math.PI / 180);
-                                 const y = 50 + rad * Math.sin(angle * Math.PI / 180);
-                                 
-                                 const isActive = targetIndex === i;
-                                 const icons: Record<string, any> = {
-                                    Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield
-                                 };
-                                 const IconComp = icons[sym.icon] || Star;
+                              {/* 12 Circular Outer Nodes with Cropped Authentic Figures */}
+                              {THAI_DESTINY_SYMBOLS.map((sym, idx) => {
+                                 const angleDeg = 90 + idx * 30; // 0=90° (เจดีย์ at bottom), 1=120° (นาคราช)...
+                                 const rad = (angleDeg * Math.PI) / 180;
+                                 const R_pct = 37.5;
+                                 const leftPct = 50 + R_pct * Math.cos(rad);
+                                 const topPct = 50 + R_pct * Math.sin(rad);
+                                 const isTarget = idx === targetIndex;
+                                 const isSelected = idx === displayIndex;
 
                                  return (
-                                    <div 
-                                      key={i}
-                                      className="absolute transition-all duration-700"
-                                      style={{ 
-                                        left: `${x}%`, 
-                                        top: `${y}%`,
-                                        transform: 'translate(-50%, -50%)'
-                                      }}
-                                    >
-                                       <div className={cn(
-                                          "flex flex-col items-center gap-1 group",
-                                          isActive ? "scale-125 z-10" : "opacity-60 grayscale-[0.2]"
-                                       )}>
-                                          <div className={cn(
-                                             "w-10 h-10 rounded-full bg-zinc-900 border flex items-center justify-center transition-all",
-                                             isActive ? "border-gold shadow-[0_0_20px_rgba(212,175,55,0.6)] bg-gold/20 scale-110" : "border-zinc-800"
-                                          )}>
-                                             <IconComp className={cn("w-5 h-5", isActive ? sym.color : "text-zinc-500")} />
-                                          </div>
-                                          <span className={cn(
-                                            "text-[8px] font-black whitespace-nowrap px-1 rounded bg-black/40",
-                                            isActive ? "text-gold" : "text-zinc-500"
-                                          )}>
-                                             {sym.name}
-                                          </span>
-                                       </div>
-                                    </div>
+                                   <button
+                                     key={sym.id}
+                                     type="button"
+                                     onClick={() => setSelectedHouseIndex(idx === selectedHouseIndex ? null : idx)}
+                                     style={{
+                                       position: 'absolute',
+                                       left: `${leftPct}%`,
+                                       top: `${topPct}%`,
+                                       transform: 'translate(-50%, -50%)',
+                                       zIndex: isSelected ? 25 : 15
+                                     }}
+                                     className="flex flex-col items-center justify-center text-center cursor-pointer group focus:outline-none"
+                                   >
+                                     <div 
+                                       className={cn(
+                                         "w-8 h-8 sm:w-9 sm:h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center p-1",
+                                         isSelected
+                                           ? "border-2 border-gold bg-gold/25 shadow-[0_0_20px_rgba(212,175,55,0.85)] scale-110"
+                                           : isTarget
+                                             ? "border border-amber-500/80 bg-amber-500/10 shadow-[0_0_10px_rgba(245,158,11,0.4)]"
+                                             : "border border-zinc-800 bg-zinc-950/80 hover:border-zinc-600 hover:bg-zinc-900/90"
+                                       )}
+                                     >
+                                       <img 
+                                         src={sym.image} 
+                                         alt={sym.name} 
+                                         className={cn(
+                                           "w-full h-full object-contain",
+                                           isSelected ? "drop-shadow-[0_0_6px_rgba(212,175,55,0.7)]" : "opacity-80 group-hover:opacity-100"
+                                         )}
+                                       />
+                                     </div>
+
+                                     <span 
+                                       className={cn(
+                                         "text-[8px] sm:text-[9px] font-bold mt-1 px-1.5 py-0.5 rounded border whitespace-nowrap leading-none",
+                                         isSelected
+                                           ? "border-gold/60 bg-zinc-950 text-gold font-black shadow-md scale-105"
+                                           : isTarget
+                                             ? "border-amber-500/40 bg-zinc-950/90 text-amber-300"
+                                             : "border-zinc-800/80 bg-zinc-950/70 text-zinc-400 group-hover:text-zinc-200"
+                                       )}
+                                     >
+                                       {sym.name}
+                                     </span>
+                                   </button>
                                  );
                               })}
                            </div>
 
-                           {/* Arrows Indicator */}
-                           <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-zinc-600 border-t border-zinc-800/50 pt-4 w-full justify-center">
-                              <div className={cn("flex items-center gap-1.5", gender === 0 && "text-gold")}>
-                                 <ChevronLeft className="w-3 h-3" /> หญิง (女) 顺时针
+                           {/* Active House Summary Card - Single Clean Row */}
+                           <div className="w-full bg-zinc-950/90 border border-gold/30 rounded-xl px-3.5 py-2.5 shadow-lg">
+                              <div className="flex items-center justify-between gap-2 w-full">
+                                 <div className="flex items-center gap-2 min-w-0">
+                                    <span className="text-xs font-bold text-gold shrink-0">
+                                       {selectedHouseIndex !== null && selectedHouseIndex !== targetIndex ? `查看第 ${activeIcon.id + 1} 宫` : `当前第 ${targetIndex + 1} 宫`}
+                                    </span>
+                                    <span className="text-sm font-black text-white shrink-0">
+                                       {activeIcon.name}
+                                    </span>
+                                    <span className="text-xs text-zinc-400 font-medium truncate">
+                                       ({activeIcon.meaning.split('(')[0].trim()})
+                                    </span>
+                                 </div>
+                                 {selectedHouseIndex !== null && selectedHouseIndex !== targetIndex && (
+                                   <button
+                                     type="button"
+                                     onClick={() => setSelectedHouseIndex(null)}
+                                     className="shrink-0 px-2.5 py-1 text-xs font-bold rounded-lg bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30 cursor-pointer"
+                                   >
+                                     返回第 {targetIndex + 1} 宫
+                                   </button>
+                                 )}
                               </div>
-                              <div className={cn("flex items-center gap-1.5", gender === 1 && "text-gold")}>
-                                 ชาย (男) 逆时针 <ChevronRight className="w-3 h-3" />
+                           </div>
+
+                           {/* Direction Guidance */}
+                           <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-zinc-600 border-t border-zinc-800/50 pt-2.5 w-full justify-center">
+                              <div className={cn("flex items-center gap-1.5", gender === 0 && "text-gold font-bold")}>
+                                 <ChevronLeft className="w-3.5 h-3.5" /> หญิง (女) 顺时针
+                              </div>
+                              <div className={cn("flex items-center gap-1.5", gender === 1 && "text-gold font-bold")}>
+                                 ชาย (男) 逆时针 <ChevronRight className="w-3.5 h-3.5" />
                               </div>
                            </div>
                         </div>
@@ -3432,28 +3863,31 @@ export default function App() {
                               <table className="w-full text-left border-collapse">
                                  <thead className="bg-black/20">
                                     <tr className="border-b border-zinc-800">
-                                       <th className="p-3 text-xs font-black text-zinc-500 uppercase tracking-widest w-24">象征</th>
+                                       <th className="p-3 text-xs font-black text-zinc-500 uppercase tracking-widest w-28 sm:w-36">宫位与名称</th>
                                        <th className="p-3 text-xs font-black text-zinc-500 uppercase tracking-widest">详情解释</th>
                                     </tr>
                                  </thead>
                                  <tbody className="divide-y divide-zinc-800/50">
                                     {THAI_DESTINY_SYMBOLS.map((sym, idx) => (
-                                       <tr key={idx} className={cn(
-                                          "hover:bg-zinc-800/30 transition-colors",
-                                          targetIndex === idx && "bg-gold/5"
-                                       )}>
-                                          <td className="p-3 flex items-center gap-3">
-                                             <div className="w-8 h-8 flex-shrink-0 bg-zinc-800/40 rounded-lg flex items-center justify-center border border-zinc-700/50">
-                                                {(() => {
-                                                   const icons: Record<string, any> = {
-                                                     Mountain, Zap, Sparkles, HeartPulse, Link, ShieldQuestion, Crown, CloudLightning, Trophy, Home, Skull, Shield
-                                                   };
-                                                   const IconComp = icons[sym.icon] || Star;
-                                                   return <IconComp className={cn("w-5 h-5", sym.color)} />;
-                                                })()}
+                                       <tr 
+                                         key={idx} 
+                                         onClick={() => setSelectedHouseIndex(idx === selectedHouseIndex ? null : idx)}
+                                         className={cn(
+                                           "hover:bg-zinc-800/30 transition-colors cursor-pointer",
+                                           displayIndex === idx && "bg-gold/10"
+                                         )}
+                                       >
+                                          <td className="p-3 flex items-center gap-2.5">
+                                             <div className={cn(
+                                                "w-7 h-7 flex-shrink-0 rounded-lg flex items-center justify-center font-black text-xs border p-0.5",
+                                                displayIndex === idx 
+                                                  ? "bg-gold text-zinc-950 border-gold shadow-[0_0_10px_rgba(212,175,55,0.5)]" 
+                                                  : "bg-zinc-800 text-zinc-400 border-zinc-700/60"
+                                             )}>
+                                                <img src={sym.image} alt={sym.name} className="w-full h-full object-contain" />
                                              </div>
                                              <div className="flex flex-col">
-                                                <span className={cn("text-xs font-black", targetIndex === idx ? "text-gold" : "text-zinc-200")}>{sym.name}</span>
+                                                <span className={cn("text-xs font-black", displayIndex === idx ? "text-gold" : "text-zinc-200")}>{sym.name}</span>
                                                 <span className="text-[9px] font-bold text-zinc-500">{sym.meaning}</span>
                                              </div>
                                           </td>
@@ -3553,6 +3987,15 @@ export default function App() {
           onNavigateToNotes={() => setView('notes')}
           reportLogo={reportLogo}
           onSaveReportLogo={handleSaveReportLogo}
+        />
+      )}
+
+      {/* VIEW: LUOPAN (风水罗盘) */}
+      {view === 'luopan' && (
+        <LuopanView
+          onOpenMenu={() => setIsSideMenuOpen(true)}
+          lang={lang}
+          onToggleLang={handleSetLang}
         />
       )}
 

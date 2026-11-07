@@ -4,6 +4,7 @@ export interface SavedClient {
   phone: string;
   birthDate: string;
   birthTime: string;
+  hasUnknownTime?: boolean;
   latitude: number;
   longitude: number;
   gender: 'male' | 'female';
