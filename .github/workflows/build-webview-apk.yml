@@ -103,6 +103,10 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
+              <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
 
               <application
                   android:allowBackup="false"
@@ -153,6 +157,7 @@ jobs:
           import android.webkit.WebChromeClient;
           import android.webkit.WebResourceRequest;
           import android.webkit.WebSettings;
+          import android.webkit.GeolocationPermissions;
 
           import androidx.webkit.WebViewAssetLoader;
 
@@ -163,6 +168,10 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+
+                  if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                      requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION}, 100);
+                  }
 
                   webView = new WebView(this);
                   setContentView(webView);
@@ -179,6 +188,7 @@ jobs:
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setDatabaseEnabled(true);
+                  settings.setGeolocationEnabled(true);
                   settings.setAllowFileAccess(false);
                   settings.setAllowContentAccess(false);
                   settings.setSupportZoom(false);
@@ -187,7 +197,15 @@ jobs:
                       WebSettings.MIXED_CONTENT_NEVER_ALLOW
                   );
 
-                  webView.setWebChromeClient(new WebChromeClient());
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override
+                      public void onGeolocationPermissionsShowPrompt(
+                          String origin,
+                          GeolocationPermissions.Callback callback
+                      ) {
+                          callback.invoke(origin, true, false);
+                      }
+                  });
 
                   webView.setWebViewClient(new WebViewClient() {
                       @Override

@@ -19,6 +19,7 @@ export interface TransitAspect {
   natalPlanet: { id: string; name: string; symbol: string; longitude: number };
   aspect: {
     name: string;
+    shortName: string;
     symbol: string;
     angle: number;
     color: string;
@@ -58,11 +59,11 @@ const PLANETS_CONFIG = [
 ];
 
 const TRANSIT_ASPECTS_DEF = [
-  { name: '合相 (Conjunction)', symbol: '☌', angle: 0, maxOrb: 4.5, color: 'text-amber-400', nature: 'neutral' as const },
-  { name: '六合 (Sextile)', symbol: '⚹', angle: 60, maxOrb: 3.5, color: 'text-cyan-400', nature: 'auspicious' as const },
-  { name: '刑相 (Square)', symbol: '□', angle: 90, maxOrb: 4.5, color: 'text-rose-400', nature: 'challenging' as const },
-  { name: '拱相 (Trine)', symbol: '△', angle: 120, maxOrb: 4.5, color: 'text-emerald-400', nature: 'auspicious' as const },
-  { name: '冲相 (Opposition)', symbol: '☍', angle: 180, maxOrb: 4.5, color: 'text-purple-400', nature: 'challenging' as const },
+  { name: '合相', shortName: '合', symbol: '☌', angle: 0, maxOrb: 4.5, color: 'text-amber-400', nature: 'neutral' as const },
+  { name: '六合', shortName: '六合', symbol: '⚹', angle: 60, maxOrb: 3.5, color: 'text-cyan-400', nature: 'auspicious' as const },
+  { name: '刑相', shortName: '刑', symbol: '□', angle: 90, maxOrb: 4.5, color: 'text-rose-400', nature: 'challenging' as const },
+  { name: '拱相', shortName: '拱', symbol: '△', angle: 120, maxOrb: 4.5, color: 'text-emerald-400', nature: 'auspicious' as const },
+  { name: '冲相', shortName: '冲', symbol: '☍', angle: 180, maxOrb: 4.5, color: 'text-purple-400', nature: 'challenging' as const },
 ];
 
 // Meaning of Transiting Planets in Natal Houses (流年过境本命十二宫含义)

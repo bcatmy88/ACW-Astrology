@@ -157,38 +157,51 @@ export default function LuopanView({ onOpenMenu, lang = 'zh', onToggleLang }: Lu
     fetchLocation();
   }, []);
 
-  // Handle Device Orientation Sensor
+  // Handle Device Orientation Sensor (supports Android deviceorientationabsolute and iOS webkitCompassHeading)
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'DeviceOrientationEvent' in window) {
-      setSensorSupported(true);
+    if (typeof window !== 'undefined') {
+      const isSupported = 'DeviceOrientationEvent' in window || 'ondeviceorientationabsolute' in window;
+      setSensorSupported(isSupported);
     }
   }, []);
 
   useEffect(() => {
     if (!useDeviceSensor || isLocked) return;
 
-    const handleOrientation = (e: DeviceOrientationEvent) => {
+    const handleOrientation = (e: any) => {
       let compassHeading: number | null = null;
-      // iOS webkitCompassHeading
-      if ((e as any).webkitCompassHeading !== undefined) {
-        compassHeading = (e as any).webkitCompassHeading;
-      } else if (e.alpha !== null) {
-        // Android fallback (approximate true heading)
+      // 1. iOS Safari webkitCompassHeading (0° = Magnetic North, clockwise)
+      if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
+        compassHeading = e.webkitCompassHeading;
+      } 
+      // 2. Android Chrome / WebView (deviceorientationabsolute or deviceorientation)
+      else if (e.alpha !== null && e.alpha !== undefined && !isNaN(e.alpha)) {
+        // e.alpha represents counter-clockwise degrees from North: [0, 360]
+        // Convert to compass clockwise heading: (360 - alpha) % 360
         compassHeading = (360 - e.alpha) % 360;
       }
 
-      if (compassHeading !== null) {
+      if (compassHeading !== null && !isNaN(compassHeading)) {
         setHeading(Math.round(compassHeading * 10) / 10);
       }
     };
 
+    // Modern Android Chromium uses 'deviceorientationabsolute' for absolute magnetic orientation
+    if ('ondeviceorientationabsolute' in window) {
+      window.addEventListener('deviceorientationabsolute' as any, handleOrientation, true);
+    }
     window.addEventListener('deviceorientation', handleOrientation, true);
+
     return () => {
+      if ('ondeviceorientationabsolute' in window) {
+        window.removeEventListener('deviceorientationabsolute' as any, handleOrientation, true);
+      }
       window.removeEventListener('deviceorientation', handleOrientation, true);
     };
   }, [useDeviceSensor, isLocked]);
 
   const requestSensorPermission = async () => {
+    // iOS 13+ permission request
     if (typeof (DeviceOrientationEvent as any)?.requestPermission === 'function') {
       try {
         const response = await (DeviceOrientationEvent as any).requestPermission();
@@ -202,6 +215,7 @@ export default function LuopanView({ onOpenMenu, lang = 'zh', onToggleLang }: Lu
         console.error(err);
       }
     } else {
+      // Android / Standard Browsers
       setUseDeviceSensor(prev => !prev);
     }
   };
@@ -253,37 +267,32 @@ export default function LuopanView({ onOpenMenu, lang = 'zh', onToggleLang }: Lu
 
   return (
     <div className="flex flex-col gap-3 pb-8 max-w-4xl mx-auto w-full">
-      {/* 1. HEADER BAR */}
+      {/* 1. HEADER BAR - Clean, Spacious, Zero Overlap */}
       <header 
-        className="sticky top-0 z-50 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-10 sm:pt-12 pb-3 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-2 shadow-lg"
-        style={{ paddingTop: 'max(2.75rem, calc(env(safe-area-inset-top, 0px) + 0.5rem))' }}
+        className="sticky top-0 z-50 px-2 sm:px-4 pt-8 sm:pt-10 pb-2.5 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800/80 flex items-center justify-between gap-2 shadow-lg"
+        style={{ paddingTop: 'max(2.5rem, calc(env(safe-area-inset-top, 0px) + 0.5rem))' }}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button 
             type="button"
             onClick={onOpenMenu}
-            className="w-10 h-10 rounded-xl flex items-center justify-center bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors text-zinc-300 hover:text-white cursor-pointer active:scale-95 shrink-0"
+            className="w-9 h-9 rounded-xl flex items-center justify-center bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors text-zinc-300 hover:text-white cursor-pointer active:scale-95 shrink-0"
             title="Menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4 h-4" />
           </button>
           
-          <div className="flex items-center gap-2 min-w-0">
-            <h1 className="text-base sm:text-lg font-bold text-white tracking-wide truncate">
-              {lang === 'zh' ? '' : ''}
-            </h1>
-            <span className="text-[11px] bg-gold/20 text-gold border border-gold/40 px-2 py-0.5 rounded-full font-black shrink-0">
-              
-            </span>
-          </div>
+          <h1 className="text-sm sm:text-base font-bold text-white tracking-wide whitespace-nowrap">
+            {lang === 'zh' ? '风水罗盘' : 'Luopan'}
+          </h1>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {/* Lock / Unlock Toggle */}
           <button
             type="button"
             onClick={() => setIsLocked(!isLocked)}
-            className={`h-9 px-2.5 rounded-xl border flex items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+            className={`h-8 px-2 rounded-lg border flex items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
               isLocked 
                 ? 'bg-amber-500/20 border-gold text-gold shadow-sm' 
                 : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
@@ -291,22 +300,22 @@ export default function LuopanView({ onOpenMenu, lang = 'zh', onToggleLang }: Lu
             title={isLocked ? '已锁盘' : '解锁中'}
           >
             {isLocked ? <Lock className="w-3.5 h-3.5 text-gold" /> : <Unlock className="w-3.5 h-3.5" />}
-            <span className="text-[11px] whitespace-nowrap">{isLocked ? '已锁盘' : '锁定'}</span>
+            <span className="text-[11px] whitespace-nowrap">{isLocked ? '已锁' : '锁定'}</span>
           </button>
 
           {/* Device Sensor Toggle */}
           <button
             type="button"
             onClick={requestSensorPermission}
-            className={`h-9 px-2.5 rounded-xl border flex items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
+            className={`h-8 px-2 rounded-lg border flex items-center gap-1 text-xs font-bold transition-all cursor-pointer ${
               useDeviceSensor 
                 ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' 
                 : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
             }`}
-            title="实景陀螺仪"
+            title="实景陀螺仪传感器"
           >
             <Compass className={`w-3.5 h-3.5 ${useDeviceSensor ? 'animate-spin' : ''}`} style={{ animationDuration: '6s' }} />
-            <span className="text-[11px] whitespace-nowrap">{useDeviceSensor ? '实测中' : '传感器'}</span>
+            <span className="text-[11px] whitespace-nowrap">{useDeviceSensor ? '实测' : '传感器'}</span>
           </button>
 
           {onToggleLang && <LanguageToggle lang={lang} onToggle={onToggleLang} />}

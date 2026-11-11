@@ -175,7 +175,7 @@ function NumerologyMatrixView({
         style={{ backgroundColor: '#090a0f', borderColor: '#222533' }}
         className="border rounded-lg overflow-x-auto custom-scrollbar"
       >
-        <table className={`w-full text-center border-collapse ${isPdf ? 'table-fixed' : 'min-w-[360px] sm:min-w-full'}`}>
+        <table className={`w-full text-center border-collapse ${isPdf ? 'table-fixed' : 'min-w-[440px] sm:min-w-full'}`}>
           <thead>
             <tr style={{ backgroundColor: '#181a24', borderBottom: '1px solid #272a38' }}>
               <th className="py-1 px-1 sm:px-1.5 text-[8px] min-[380px]:text-[9px] sm:text-[10px] font-bold text-zinc-400 text-left w-10 sm:w-14 whitespace-nowrap">类别</th>
@@ -747,22 +747,22 @@ function WesternAstrologyFullView({
           </div>
 
           {/* 4 轴角度小卡片 */}
-          <div className="grid grid-cols-4 gap-1 w-full text-center text-[9px] font-bold mt-1">
-            <div className="p-1 rounded bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 flex flex-col">
-              <span className="text-[7.5px] text-emerald-500 uppercase font-black">上升 ASC</span>
-              <span className="truncate">{westernData.ascSign.name} {Math.floor(westernData.ascDeg)}°</span>
+          <div className={`grid ${isPdf ? 'grid-cols-4 gap-1.5' : 'grid-cols-2 sm:grid-cols-4 gap-1.5'} w-full text-center text-[10px] font-bold mt-1`}>
+            <div className="p-1.5 rounded bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 flex flex-col">
+              <span className="text-[8px] text-emerald-500 uppercase font-black">上升 ASC</span>
+              <span className="whitespace-nowrap">{westernData.ascSign.name} {Math.floor(westernData.ascDeg)}°</span>
             </div>
-            <div className="p-1 rounded bg-amber-950/40 border border-amber-800/50 text-amber-400 flex flex-col">
-              <span className="text-[7.5px] text-amber-500 uppercase font-black">中天 MC</span>
-              <span className="truncate">{westernData.mcSign.name} {Math.floor(westernData.mcDeg)}°</span>
+            <div className="p-1.5 rounded bg-amber-950/40 border border-amber-800/50 text-amber-400 flex flex-col">
+              <span className="text-[8px] text-amber-500 uppercase font-black">中天 MC</span>
+              <span className="whitespace-nowrap">{westernData.mcSign.name} {Math.floor(westernData.mcDeg)}°</span>
             </div>
-            <div className="p-1 rounded bg-rose-950/40 border border-rose-800/50 text-rose-400 flex flex-col">
-              <span className="text-[7.5px] text-rose-500 uppercase font-black">下降 DSC</span>
-              <span className="truncate">{westernData.dscSign.name}</span>
+            <div className="p-1.5 rounded bg-rose-950/40 border border-rose-800/50 text-rose-400 flex flex-col">
+              <span className="text-[8px] text-rose-500 uppercase font-black">下降 DSC</span>
+              <span className="whitespace-nowrap">{westernData.dscSign.name}</span>
             </div>
-            <div className="p-1 rounded bg-sky-950/40 border border-sky-800/50 text-sky-400 flex flex-col">
-              <span className="text-[7.5px] text-sky-500 uppercase font-black">天底 IC</span>
-              <span className="truncate">{westernData.icSign.name}</span>
+            <div className="p-1.5 rounded bg-sky-950/40 border border-sky-800/50 text-sky-400 flex flex-col">
+              <span className="text-[8px] text-sky-500 uppercase font-black">天底 IC</span>
+              <span className="whitespace-nowrap">{westernData.icSign.name}</span>
             </div>
           </div>
         </div>
@@ -781,9 +781,9 @@ function WesternAstrologyFullView({
           </div>
 
           <div className="border border-zinc-800 rounded-lg overflow-x-auto no-scrollbar bg-black/40">
-            <table className="w-full border-collapse text-left">
+            <table className="w-full border-collapse text-left min-w-[280px]">
               <thead>
-                <tr className="bg-zinc-900/90 text-[9px] text-zinc-400 font-bold border-b border-zinc-800 whitespace-nowrap">
+                <tr className="bg-zinc-900/90 text-[9.5px] text-zinc-400 font-bold border-b border-zinc-800 whitespace-nowrap">
                   <th className="py-1 px-2 whitespace-nowrap">行星</th>
                   <th className="py-1 px-1.5 whitespace-nowrap">落入星座</th>
                   <th className="py-1 px-1.5 whitespace-nowrap">度数</th>
@@ -843,31 +843,31 @@ function WesternAstrologyFullView({
         {aspects.length === 0 ? (
           <div className="py-4 text-center text-xs text-zinc-500">无主要相位</div>
         ) : (
-          <div className={`grid ${isPdf ? 'grid-cols-3 gap-1' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5'}`}>
+          <div className={`grid ${isPdf ? 'grid-cols-2 gap-2' : 'grid-cols-1 sm:grid-cols-2 gap-2'}`}>
             {aspects.map((asp, idx) => (
               <div 
                 key={idx}
                 style={{ backgroundColor: '#090a0f', borderColor: '#222533' }}
-                className="border rounded-lg px-2 py-1 flex items-center justify-between shadow-sm text-[9.5px]"
+                className="border rounded-lg px-2.5 py-1.5 flex items-center justify-between shadow-sm text-[10px] sm:text-[11px]"
               >
-                <div className="flex items-center gap-1 font-bold text-white truncate">
+                <div className="flex items-center gap-1 font-bold text-white shrink-0">
                   <span className="text-[#d4af37] font-serif">{asp.p1.symbol}</span>
-                  <span className="truncate">{asp.p1.name}</span>
+                  <span>{asp.p1.name}</span>
                 </div>
 
-                <div className="flex items-center gap-1 mx-1 shrink-0">
-                  <span style={{ color: asp.aspect.color }} className="font-bold">
+                <div className="flex items-center gap-1 mx-1.5 shrink-0">
+                  <span style={{ color: asp.aspect.color }} className="font-bold text-[10.5px]">
                     {asp.aspect.symbol} {asp.aspect.name}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1 font-bold text-white truncate">
-                  <span className="truncate">{asp.p2.name}</span>
+                <div className="flex items-center gap-1 font-bold text-white shrink-0">
+                  <span>{asp.p2.name}</span>
                   <span className="text-[#d4af37] font-serif">{asp.p2.symbol}</span>
                 </div>
 
-                <div className="text-[8px] font-mono text-zinc-500 shrink-0 ml-1">
-                  Err:{asp.orbErr.toFixed(1)}°
+                <div className="text-[9px] font-mono text-zinc-400 shrink-0 ml-auto pl-1">
+                  误差:{asp.orbErr.toFixed(1)}°
                 </div>
               </div>
             ))}
@@ -1675,13 +1675,13 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                   {/* 地支 */}
                   <div className="grid grid-cols-7 border-b border-zinc-800 text-center bg-zinc-950/70">
                     {analysisData.pillars.map((p, i) => (
-                      <div key={i} className="py-3.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center justify-center">
-                        <span className="text-xl font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
+                      <div key={i} className="py-2.5 sm:py-3.5 border-r border-zinc-800 last:border-r-0 flex flex-col items-center justify-center">
+                        <span className="text-xl sm:text-2xl font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
                           {p.zhi}
                         </span>
-                        <div className="flex gap-1 mt-1.5">
+                        <div className="flex flex-col gap-0.5 mt-1 items-center">
                           {getShiShenFromZhi(analysisData.dayGan, p.zhi).slice(0, 2).map((s, idx) => (
-                            <span key={idx} className="text-[8px] text-zinc-400 font-bold px-1 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                            <span key={idx} className="text-[7.5px] sm:text-[8px] text-zinc-400 font-bold px-1 py-0.5 rounded bg-zinc-900 border border-zinc-800 whitespace-nowrap leading-none">
                               {getShiShenShort(s)}
                             </span>
                           ))}
@@ -1755,19 +1755,21 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                   </div>
 
                   {/* 流月节气 */}
-                  <div className="grid grid-cols-12 gap-0.5 text-center">
-                    {analysisData.liuYueList.map((ly, idx) => {
-                      const gan = ly.getGanZhi().substring(0, 1);
-                      const zhi = ly.getGanZhi().substring(1, 2);
-                      return (
-                        <div key={idx} className="p-1 rounded bg-zinc-950 border border-zinc-800/80 flex flex-col items-center">
-                          <span className="text-[7px] text-zinc-500">{JIE_QI_TERMS[idx]}</span>
-                          <span className="text-[10px] font-bold font-serif" style={{ color: getBaziColorHex(gan) }}>
-                            {gan}{zhi}
-                          </span>
-                        </div>
-                      );
-                    })}
+                  <div className="overflow-x-auto no-scrollbar pb-0.5">
+                    <div className="grid grid-cols-12 gap-1 text-center min-w-[460px] sm:min-w-full">
+                      {analysisData.liuYueList.map((ly, idx) => {
+                        const gan = ly.getGanZhi().substring(0, 1);
+                        const zhi = ly.getGanZhi().substring(1, 2);
+                        return (
+                          <div key={idx} className="p-1 rounded bg-zinc-950 border border-zinc-800/80 flex flex-col items-center">
+                            <span className="text-[7.5px] text-zinc-400 whitespace-nowrap">{JIE_QI_TERMS[idx]}</span>
+                            <span className="text-[10px] font-bold font-serif whitespace-nowrap" style={{ color: getBaziColorHex(gan) }}>
+                              {gan}{zhi}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -2153,9 +2155,9 @@ export default function PdfShareModal({ client, onClose, reportLogo }: PdfShareM
                     <span className="text-2xl font-serif font-black" style={{ color: getBaziColorHex(p.zhi) }}>
                       {p.zhi}
                     </span>
-                    <div className="flex gap-1 mt-1.5">
+                    <div className="flex flex-col gap-0.5 mt-1 items-center">
                       {getShiShenFromZhi(analysisData.dayGan, p.zhi).slice(0, 2).map((s, idx) => (
-                        <span key={idx} className="text-[8px] text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                        <span key={idx} className="text-[8px] text-zinc-400 font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 whitespace-nowrap leading-none">
                           {getShiShenShort(s)}
                         </span>
                       ))}
